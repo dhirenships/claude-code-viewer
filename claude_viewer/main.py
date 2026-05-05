@@ -226,7 +226,7 @@ async def render_conversation_template(
     request: Request,
     project_name: str,
     session_id: str,
-    page: int,
+    page: Optional[int],
     per_page: int,
     search: Optional[str],
     message_type: Optional[str],
@@ -238,7 +238,7 @@ async def render_conversation_template(
         project_name, session_id, page, per_page, search, message_type
     )
 
-    if not conversation["messages"] and page == 1:
+    if not conversation["messages"] and (page is None or page == 1):
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     # Render markdown content
@@ -262,7 +262,7 @@ async def conversation_view(
     request: Request,
     project_name: str,
     session_id: str,
-    page: int = Query(1, ge=1),
+    page: Optional[int] = Query(None, ge=1),
     per_page: int = Query(50, le=200, ge=10),
     search: Optional[str] = Query(None),
     message_type: Optional[str] = Query(None),
@@ -278,7 +278,7 @@ async def embedded_conversation_view(
     request: Request,
     project_name: str,
     session_id: str,
-    page: int = Query(1, ge=1),
+    page: Optional[int] = Query(None, ge=1),
     per_page: int = Query(50, le=200, ge=10),
     search: Optional[str] = Query(None),
     message_type: Optional[str] = Query(None)

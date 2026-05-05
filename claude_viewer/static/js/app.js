@@ -10,6 +10,7 @@ class ClaudeViewer {
         this.setupCodeCopyButtons();
         this.setupSearch();
         this.setupSidebar();
+        this.setupConversationScroll();
     }
 
     setupEventListeners() {
@@ -218,6 +219,18 @@ class ClaudeViewer {
                 }, 500);
             });
         }
+    }
+
+    setupConversationScroll() {
+        const messagesContainer = document.querySelector('.messages-container');
+        if (!messagesContainer || window.location.hash) return;
+
+        requestAnimationFrame(() => {
+            window.scrollTo({
+                top: document.documentElement.scrollHeight,
+                behavior: 'auto'
+            });
+        });
     }
 
     toggleTheme() {

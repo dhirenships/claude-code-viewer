@@ -10,6 +10,7 @@
 {% set initial_session = selected_session or (recent_sessions[0].id if recent_sessions else '') %}
 
 {% if projects %}
+<div class="sessions-page">
 <div class="global-search-shell">
     <form class="global-search-form" method="get" action="/">
         <label for="global-search">Search all sessions</label>
@@ -165,6 +166,7 @@
             {% endif %}
         </div>
     </section>
+</div>
 </div>
 {% else %}
 <div class="text-center py-5">

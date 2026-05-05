@@ -83,7 +83,7 @@ class JSONLParser:
         self, 
         project_name: str, 
         session_id: str, 
-        page: int = 1, 
+        page: Optional[int] = 1,
         per_page: int = 50,
         search: Optional[str] = None,
         message_type: Optional[str] = None
@@ -93,7 +93,7 @@ class JSONLParser:
         session_path = os.path.join(self.claude_projects_path, project_name, f"{session_id}.jsonl")
         
         if not os.path.exists(session_path):
-            return {"messages": [], "total": 0, "page": page, "per_page": per_page}
+            return {"messages": [], "total": 0, "page": page or 1, "per_page": per_page, "total_pages": 0}
         
         messages = []
         with open(session_path, 'r', encoding='utf-8') as f:
@@ -113,6 +113,12 @@ class JSONLParser:
         
         # Pagination
         total = len(messages)
+        total_pages = (total + per_page - 1) // per_page
+        if page is None:
+            page = total_pages or 1
+        else:
+            page = min(max(page, 1), total_pages or 1)
+
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
         paginated_messages = messages[start_idx:end_idx]
@@ -122,7 +128,7 @@ class JSONLParser:
             "total": total,
             "page": page,
             "per_page": per_page,
-            "total_pages": (total + per_page - 1) // per_page
+            "total_pages": total_pages
         }
 
     def search_messages(self, search: str, limit: int = 100) -> Dict:

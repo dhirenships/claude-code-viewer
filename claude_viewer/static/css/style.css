@@ -19,6 +19,17 @@ body {
     background-color: #f8fafc;
 }
 
+body:has(.sessions-page) {
+    overflow: hidden;
+}
+
+main.container:has(.sessions-page) {
+    display: block;
+    height: 100vh;
+    max-width: none;
+    padding: 0.75rem;
+}
+
 .dark-theme {
     background-color: var(--dark-bg);
     color: #e2e8f0;
@@ -64,12 +75,22 @@ body {
 }
 
 /* Home layout */
+.sessions-page {
+    position: fixed;
+    inset: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
 .global-search-shell {
-    position: sticky;
-    top: 0;
+    flex: 0 0 auto;
     z-index: 30;
-    margin: 0 -0.25rem 0.75rem;
-    padding: 0.5rem 0.25rem;
+    margin: 0;
+    padding: 0;
     background: #f8fafc;
 }
 
@@ -210,13 +231,16 @@ body {
     grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
     gap: 1rem;
     align-items: start;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .session-sidebar {
-    position: sticky;
-    top: 0.75rem;
-    max-height: calc(100vh - 1.5rem);
+    height: 100%;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
@@ -422,7 +446,9 @@ body {
 }
 
 .home-overview {
+    height: 100%;
     min-width: 0;
+    min-height: 0;
 }
 
 .overview-header {
@@ -433,6 +459,7 @@ body {
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 0.5rem;
+    height: 100%;
     overflow: hidden;
 }
 
@@ -444,9 +471,11 @@ body {
 .conversation-frame {
     display: block;
     width: 100%;
-    min-height: calc(100vh - 5.5rem);
+    height: 100%;
+    min-height: 0;
     border: 0;
     background: white;
+    overscroll-behavior: contain;
 }
 
 .conversation-empty-state {
@@ -858,13 +887,41 @@ code {
 
 /* Responsive */
 @media (max-width: 768px) {
+    body:has(.sessions-page) {
+        overflow: auto;
+    }
+
+    main.container:has(.sessions-page) {
+        height: auto;
+    }
+
+    .sessions-page,
+    .home-layout {
+        min-height: auto;
+        overflow: visible;
+    }
+
+    .sessions-page {
+        position: static;
+        height: auto;
+    }
+
     .home-layout {
         grid-template-columns: 1fr;
     }
 
     .session-sidebar {
-        position: static;
-        max-height: none;
+        height: auto;
+        max-height: 45vh;
+    }
+
+    .home-overview,
+    .conversation-panel {
+        height: auto;
+    }
+
+    .conversation-frame {
+        height: 70vh;
     }
 
     .stats-grid {
