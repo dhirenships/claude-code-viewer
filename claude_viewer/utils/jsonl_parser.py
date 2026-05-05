@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from datetime import datetime
 import difflib
+import html
 
 class JSONLParser:
     def __init__(self, claude_projects_path: str = None):
@@ -31,6 +32,25 @@ class JSONLParser:
                 })
         
         return sorted(projects, key=lambda x: x["display_name"])
+
+    def get_projects_with_sessions(self) -> List[Dict]:
+        """Return projects with session metadata, sorted by latest activity."""
+        projects = []
+        for project in self.get_projects():
+            sessions = self.get_sessions(project["name"])
+            latest_session = sessions[0] if sessions else None
+
+            projects.append({
+                **project,
+                "sessions": sessions,
+                "latest_modified": latest_session["modified"] if latest_session else None,
+            })
+
+        return sorted(
+            projects,
+            key=lambda project: project["latest_modified"] or "",
+            reverse=True,
+        )
     
     def get_sessions(self, project_name: str) -> List[Dict]:
         """Get all session files for a project with metadata"""
@@ -104,6 +124,58 @@ class JSONLParser:
             "per_page": per_page,
             "total_pages": (total + per_page - 1) // per_page
         }
+
+    def search_messages(self, search: str, limit: int = 100) -> Dict:
+        """Search user and assistant messages across every session."""
+        search = (search or "").strip()
+        if not search:
+            return {"results": [], "total": 0, "limit": limit}
+
+        projects = self.get_projects_with_sessions()
+        results = []
+        total = 0
+
+        for project in projects:
+            for session in project["sessions"]:
+                session_path = os.path.join(
+                    self.claude_projects_path,
+                    project["name"],
+                    f"{session['id']}.jsonl",
+                )
+
+                if not os.path.exists(session_path):
+                    continue
+
+                session_match_count = 0
+                with open(session_path, 'r', encoding='utf-8') as f:
+                    for line_num, line in enumerate(f, 1):
+                        try:
+                            data = json.loads(line.strip())
+                        except json.JSONDecodeError:
+                            continue
+
+                        message = self._parse_message(data, line_num)
+                        if not self._should_include_message(message, search, None):
+                            continue
+
+                        session_match_count += 1
+                        total += 1
+                        if len(results) >= limit:
+                            continue
+
+                        results.append({
+                            "project_name": project["name"],
+                            "project_display_name": project["display_name"],
+                            "session_id": session["id"],
+                            "session_modified": session["modified"],
+                            "line_number": line_num,
+                            "page": ((session_match_count - 1) // 50) + 1,
+                            "role": message.get("role", ""),
+                            "timestamp": message.get("timestamp"),
+                            "snippet": self._make_search_snippet(message.get("content", ""), search),
+                        })
+
+        return {"results": results, "total": total, "limit": limit}
     
     def _parse_message(self, data: Dict, line_num: int) -> Dict:
         """Parse different types of JSONL messages"""
@@ -280,8 +352,14 @@ class JSONLParser:
     ) -> bool:
         """Apply search and type filters"""
         
-        # Type filter
-        if message_type and message.get("role", "").lower() != message_type.lower():
+        role = message.get("role", "").lower()
+
+        # Type filter. By default the viewer focuses on the real conversation
+        # turns and hides summaries, tool/system records, and other JSONL noise.
+        if message_type:
+            if role != message_type.lower():
+                return False
+        elif role not in {"user", "assistant"}:
             return False
         
         # Search filter
@@ -293,6 +371,34 @@ class JSONLParser:
                 return False
         
         return True
+
+    def _make_search_snippet(self, content: str, search: str, radius: int = 90) -> str:
+        """Return a compact escaped snippet with the search term highlighted."""
+        text = re.sub(r'\s+', ' ', str(content)).strip()
+        search_text = search.lower()
+        match_index = text.lower().find(search_text)
+
+        if match_index == -1:
+            snippet = text[:radius * 2]
+            prefix = ""
+            suffix = "..." if len(text) > len(snippet) else ""
+        else:
+            start = max(match_index - radius, 0)
+            end = min(match_index + len(search) + radius, len(text))
+            snippet = text[start:end]
+            prefix = "..." if start > 0 else ""
+            suffix = "..." if end < len(text) else ""
+
+        escaped = html.escape(snippet)
+        escaped_search = re.escape(html.escape(search))
+        highlighted = re.sub(
+            f"({escaped_search})",
+            r"<mark>\1</mark>",
+            escaped,
+            flags=re.IGNORECASE,
+        )
+
+        return f"{prefix}{highlighted}{suffix}"
     
     def _count_messages(self, file_path: str) -> int:
         """Count total messages in JSONL file"""

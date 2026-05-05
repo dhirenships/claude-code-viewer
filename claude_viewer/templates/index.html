@@ -1,109 +1,185 @@
 {% extends "base.html" %}
 
-{% block title %}Projects - Claude Code Viewer{% endblock %}
+{% block title %}Sessions - Claude Code Viewer{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>
-                <i class="bi bi-folder me-2"></i>
-                Your Projects
-            </h2>
-            <div class="text-muted">
-                {{ projects|length }} project{{ 's' if projects|length != 1 else '' }} found
-            </div>
-        </div>
+{% set total_sessions = projects|sum(attribute='session_count') %}
+{% set selected_project = request.query_params.get('project') %}
+{% set selected_session = request.query_params.get('session') %}
+{% set initial_project = selected_project or (recent_sessions[0].project_name if recent_sessions else '') %}
+{% set initial_session = selected_session or (recent_sessions[0].id if recent_sessions else '') %}
 
-        {% if projects %}
-            <div class="row">
-                {% for project in projects %}
-                    <div class="col-md-6 col-lg-4 mb-4">
-                        <div class="card project-card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">
-                                    <i class="bi bi-folder2-open me-2"></i>
-                                    {{ project.display_name }}
-                                </h5>
-                                
-                                <p class="card-text text-muted">
-                                    <small>{{ project.name }}</small>
-                                </p>
-                                
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="session-stats">
-                                        <span class="badge badge-primary">
-                                            <i class="bi bi-chat-dots me-1"></i>
-                                            {{ project.session_count }} session{{ 's' if project.session_count != 1 else '' }}
-                                        </span>
-                                    </div>
-                                    
-                                    <a href="/project/{{ project.name }}" class="btn btn-primary btn-sm">
-                                        <i class="bi bi-arrow-right me-1"></i>
-                                        View Sessions
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="text-center py-5">
-                <div class="mb-4">
-                    <i class="bi bi-folder-x" style="font-size: 4rem; color: var(--secondary-color);"></i>
-                </div>
-                <h4 class="text-muted">No Projects Found</h4>
-                <p class="text-muted">
-                    Make sure Claude Code has been used and projects exist in:<br>
-                    <code>~/.claude/projects/</code>
-                </p>
-                <a href="/health" class="btn btn-outline-primary">
-                    <i class="bi bi-heart-pulse me-1"></i>
-                    Check System Status
+{% if projects %}
+<div class="global-search-shell">
+    <form class="global-search-form" method="get" action="/">
+        <label for="global-search">Search all sessions</label>
+        <div class="global-search-row">
+            <input
+                id="global-search"
+                name="q"
+                class="global-search-input"
+                type="search"
+                placeholder="Search every user and claude message..."
+                value="{{ global_search or '' }}"
+            >
+            <button type="submit" class="search-btn">
+                <i class="bi bi-search me-1"></i>
+                Search
+            </button>
+            {% if global_search %}
+                <a class="clear-global-search" href="/">
+                    <i class="bi bi-x-circle me-1"></i>
+                    Clear
                 </a>
+            {% endif %}
+        </div>
+    </form>
+
+    {% if global_search %}
+        <div class="global-search-results">
+            <div class="global-search-summary">
+                <span>{{ global_search_results.total }} result{{ 's' if global_search_results.total != 1 else '' }} for "{{ global_search }}"</span>
+                {% if global_search_results.total > global_search_results.limit %}
+                    <span>Showing first {{ global_search_results.limit }}</span>
+                {% endif %}
             </div>
-        {% endif %}
-    </div>
+
+            {% if global_search_results.results %}
+                <div class="global-result-list">
+                    {% for result in global_search_results.results %}
+                        <a
+                            class="global-result"
+                            href="/conversation/{{ result.project_name }}/{{ result.session_id }}?embedded=true&search={{ global_search | urlencode }}{% if result.page > 1 %}&page={{ result.page }}{% endif %}#message-line-{{ result.line_number }}"
+                            target="conversation-frame"
+                            data-project="{{ result.project_name }}"
+                            data-session="{{ result.session_id }}"
+                            data-global-result
+                        >
+                            <span class="global-result-meta">
+                                <span class="message-role {{ result.role }}">
+                                    {% if result.role == 'assistant' %}
+                                        <i class="bi bi-cpu"></i>
+                                        Claude
+                                    {% else %}
+                                        <i class="bi bi-person-circle"></i>
+                                        User
+                                    {% endif %}
+                                </span>
+                                <span>{{ result.project_display_name }}</span>
+                                <span>Session {{ result.session_id[:8] }}...</span>
+                                <span>Line {{ result.line_number }}</span>
+                            </span>
+                            <span class="global-result-snippet">{{ result.snippet | safe }}</span>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="global-no-results">No user or claude messages matched.</div>
+            {% endif %}
+        </div>
+    {% endif %}
 </div>
 
-<!-- Quick Stats -->
-{% if projects %}
-<div class="row mt-5">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="mb-0">
-                    <i class="bi bi-bar-chart me-2"></i>
-                    Quick Statistics
-                </h6>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-3">
-                        <div class="h4 text-primary">{{ projects|length }}</div>
-                        <small class="text-muted">Total Projects</small>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="h4 text-success">{{ projects|sum(attribute='session_count') }}</div>
-                        <small class="text-muted">Total Sessions</small>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="h4 text-warning">
-                            {{ (projects|sum(attribute='session_count') / projects|length)|round(1) if projects|length > 0 else 0 }}
-                        </div>
-                        <small class="text-muted">Avg Sessions/Project</small>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="h4 text-info">
-                            <i class="bi bi-hdd"></i>
-                        </div>
-                        <small class="text-muted">Storage Location</small>
-                    </div>
-                </div>
+<div class="home-layout">
+    <aside class="session-sidebar" aria-label="Projects and sessions">
+        <div class="sidebar-header">
+            <div>
+                <h2>
+                    <i class="bi bi-clock-history me-2"></i>
+                    Sessions
+                </h2>
+                <p>{{ projects|length }} project{{ 's' if projects|length != 1 else '' }} / {{ total_sessions }} session{{ 's' if total_sessions != 1 else '' }}</p>
             </div>
         </div>
+
+        <div class="project-session-groups">
+            {% for project in projects %}
+                {% set latest_day = project.sessions[0].modified[:10] if project.sessions else '' %}
+                {% set is_open = project.name == initial_project %}
+                <section class="project-session-group {{ '' if is_open else 'collapsed' }}" data-project-group>
+                    <div class="project-session-heading">
+                        <button
+                            type="button"
+                            class="project-toggle"
+                            aria-expanded="{{ 'true' if is_open else 'false' }}"
+                            data-project-toggle
+                        >
+                            <i class="bi bi-chevron-down project-chevron"></i>
+                            <span>{{ project.display_name }}</span>
+                        </button>
+                        <a class="project-open-link" href="/project/{{ project.name }}" title="Open project">
+                            <i class="bi bi-box-arrow-up-right"></i>
+                        </a>
+                        <span class="session-count">{{ project.session_count }}</span>
+                    </div>
+
+                    <div class="session-links">
+                        {% for session in project.sessions %}
+                            {% set is_last_active_day = session.modified[:10] == latest_day %}
+                            <a
+                                class="session-link {{ '' if is_last_active_day else 'session-extra d-none' }} {{ 'active' if session.id == initial_session and project.name == initial_project else '' }}"
+                                href="/conversation/{{ project.name }}/{{ session.id }}?embedded=true"
+                                target="conversation-frame"
+                                data-project="{{ project.name }}"
+                                data-session="{{ session.id }}"
+                            >
+                                <span class="session-link-title">
+                                    <i class="bi bi-chat-text"></i>
+                                    Session {{ session.id[:8] }}...
+                                </span>
+                                <span class="session-link-meta">
+                                    <span>{{ session.message_count }} messages</span>
+                                    <span>
+                                        <script>
+                                            document.write(window.formatRelativeTime("{{ session.modified }}"));
+                                        </script>
+                                    </span>
+                                </span>
+                            </a>
+                        {% endfor %}
+                        {% if project.sessions|length > 0 %}
+                            <button type="button" class="show-more-sessions" data-session-reveal>
+                                Show 4 more
+                            </button>
+                        {% endif %}
+                    </div>
+                </section>
+            {% endfor %}
+        </div>
+    </aside>
+
+    <section class="home-overview">
+        <div class="conversation-panel">
+            {% if recent_sessions %}
+                <iframe
+                    class="conversation-frame"
+                    name="conversation-frame"
+                    title="Conversation viewer"
+                    src="/conversation/{{ initial_project }}/{{ initial_session }}?embedded=true{% if global_search and selected_project and selected_session %}&search={{ global_search | urlencode }}{% endif %}"
+                ></iframe>
+            {% else %}
+                <div class="conversation-empty-state">
+                    <i class="bi bi-chat-square-text"></i>
+                    <p>No sessions found yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% else %}
+<div class="text-center py-5">
+    <div class="mb-4">
+        <i class="bi bi-folder-x" style="font-size: 4rem; color: var(--secondary-color);"></i>
     </div>
+    <h4 class="text-muted">No Projects Found</h4>
+    <p class="text-muted">
+        Make sure Claude Code has been used and projects exist in:<br>
+        <code>~/.claude/projects/</code>
+    </p>
+    <a href="/health" class="btn btn-outline-primary">
+        <i class="bi bi-heart-pulse me-1"></i>
+        Check System Status
+    </a>
 </div>
 {% endif %}
 {% endblock %}

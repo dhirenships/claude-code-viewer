@@ -105,18 +105,20 @@ Examples:
     print(f"⚡ Claude Code Viewer v{__version__}")
     print(f"📁 Using projects: {os.environ['CLAUDE_PROJECTS_PATH']}")
     print(f"🌐 Starting server at http://{args.host}:{args.port}")
+    print(f"♻️  Auto-reload enabled for code, templates, and static files")
     print(f"🔍 Press Ctrl+C to stop")
     print()
     
     try:
-        # Import and run the FastAPI app
-        from .main import app
         uvicorn.run(
-            app,
+            "claude_viewer.main:app",
             host=args.host,
             port=args.port,
             log_level="info",
-            access_log=False  # Reduce log noise
+            access_log=False,  # Reduce log noise
+            reload=True,
+            reload_dirs=[str(Path(__file__).parent)],
+            reload_includes=["*.py", "*.html", "*.css", "*.js"],
         )
     except KeyboardInterrupt:
         print("\n👋 Claude Code Viewer stopped")

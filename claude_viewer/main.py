@@ -160,13 +160,36 @@ def process_markdown_text(text: str) -> str:
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
+async def root(
+    request: Request,
+    q: Optional[str] = Query(None),
+):
     """Main page showing all projects"""
     parser = get_parser()
-    projects = parser.get_projects()
+    projects = parser.get_projects_with_sessions()
+    global_search = (q or "").strip()
+    global_search_results = parser.search_messages(global_search) if global_search else None
+    recent_sessions = [
+        {
+            **session,
+            "project_name": project["name"],
+            "project_display_name": project["display_name"],
+        }
+        for project in projects
+        for session in project["sessions"]
+    ]
+    recent_sessions = sorted(
+        recent_sessions,
+        key=lambda session: session["modified"],
+        reverse=True,
+    )
+
     return templates.TemplateResponse("index.html", {
         "request": request,
-        "projects": projects
+        "projects": projects,
+        "recent_sessions": recent_sessions,
+        "global_search": global_search,
+        "global_search_results": global_search_results,
     })
 
 @app.get("/api/projects", response_model=List[Project])
@@ -199,6 +222,41 @@ async def get_sessions(project_name: str):
         raise HTTPException(status_code=404, detail="Project not found")
     return sessions
 
+async def render_conversation_template(
+    request: Request,
+    project_name: str,
+    session_id: str,
+    page: int,
+    per_page: int,
+    search: Optional[str],
+    message_type: Optional[str],
+    embedded: bool = False
+):
+    """Render a conversation in either full-page or embedded mode."""
+    parser = get_parser()
+    conversation = parser.get_conversation(
+        project_name, session_id, page, per_page, search, message_type
+    )
+
+    if not conversation["messages"] and page == 1:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    # Render markdown content
+    for message in conversation["messages"]:
+        if message.get("content"):
+            message["rendered_content"] = render_markdown_with_code(message["content"])
+
+    return templates.TemplateResponse("conversation.html", {
+        "request": request,
+        "project_name": project_name,
+        "session_id": session_id,
+        "conversation": conversation,
+        "search": search,
+        "message_type": message_type,
+        "display_name": parser._format_project_name(project_name),
+        "embedded": embedded,
+    })
+
 @app.get("/conversation/{project_name}/{session_id}", response_class=HTMLResponse)
 async def conversation_view(
     request: Request,
@@ -207,31 +265,28 @@ async def conversation_view(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, le=200, ge=10),
     search: Optional[str] = Query(None),
-    message_type: Optional[str] = Query(None)
+    message_type: Optional[str] = Query(None),
+    embedded: bool = Query(False)
 ):
     """Conversation viewer page"""
-    parser = get_parser()
-    conversation = parser.get_conversation(
-        project_name, session_id, page, per_page, search, message_type
+    return await render_conversation_template(
+        request, project_name, session_id, page, per_page, search, message_type, embedded
     )
-    
-    if not conversation["messages"] and page == 1:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    
-    # Render markdown content
-    for message in conversation["messages"]:
-        if message.get("content"):
-            message["rendered_content"] = render_markdown_with_code(message["content"])
-    
-    return templates.TemplateResponse("conversation.html", {
-        "request": request,
-        "project_name": project_name,
-        "session_id": session_id,
-        "conversation": conversation,
-        "search": search,
-        "message_type": message_type,
-        "display_name": parser._format_project_name(project_name)
-    })
+
+@app.get("/embedded/conversation/{project_name}/{session_id}", response_class=HTMLResponse)
+async def embedded_conversation_view(
+    request: Request,
+    project_name: str,
+    session_id: str,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, le=200, ge=10),
+    search: Optional[str] = Query(None),
+    message_type: Optional[str] = Query(None)
+):
+    """Conversation viewer for the homepage right pane."""
+    return await render_conversation_template(
+        request, project_name, session_id, page, per_page, search, message_type, True
+    )
 
 @app.get("/api/conversation/{project_name}/{session_id}", response_model=ConversationResponse)
 async def get_conversation(

@@ -9,6 +9,7 @@ class ClaudeViewer {
         this.setupEventListeners();
         this.setupCodeCopyButtons();
         this.setupSearch();
+        this.setupSidebar();
     }
 
     setupEventListeners() {
@@ -35,6 +36,153 @@ class ClaudeViewer {
         filters.forEach(filter => {
             filter.addEventListener('change', () => this.autoSubmitFilters());
         });
+
+        const sessionLinks = document.querySelectorAll('.session-link[target="conversation-frame"]');
+        sessionLinks.forEach(link => {
+            link.addEventListener('click', (event) => this.handleSessionClick(event, link));
+        });
+
+        const globalResults = document.querySelectorAll('[data-global-result][target="conversation-frame"]');
+        globalResults.forEach(link => {
+            link.addEventListener('click', (event) => this.handleGlobalResultClick(event, link));
+        });
+
+        const projectToggles = document.querySelectorAll('[data-project-toggle]');
+        projectToggles.forEach(toggle => {
+            toggle.addEventListener('click', () => this.toggleProject(toggle));
+        });
+
+        const revealButtons = document.querySelectorAll('[data-session-reveal]');
+        revealButtons.forEach(button => {
+            button.addEventListener('click', () => this.revealMoreSessions(button));
+        });
+
+        window.addEventListener('popstate', () => this.syncSessionFromUrl());
+    }
+
+    setActiveSession(activeLink) {
+        const sessionLinks = document.querySelectorAll('.session-link[target="conversation-frame"]');
+        sessionLinks.forEach(link => link.classList.remove('active'));
+        activeLink.classList.add('active');
+        activeLink.classList.remove('d-none');
+
+        const group = activeLink.closest('[data-project-group]');
+        if (group) {
+            this.setProjectCollapsed(group, false);
+        }
+    }
+
+    handleSessionClick(event, link) {
+        const frame = document.querySelector('iframe[name="conversation-frame"]');
+        if (!frame) {
+            this.setActiveSession(link);
+            return;
+        }
+
+        event.preventDefault();
+        frame.src = link.href;
+        this.setActiveSession(link);
+        this.updateSessionUrl(link);
+    }
+
+    handleGlobalResultClick(event, resultLink) {
+        const frame = document.querySelector('iframe[name="conversation-frame"]');
+        if (!frame) return;
+
+        event.preventDefault();
+        frame.src = resultLink.href;
+
+        const sidebarLink = this.findSessionLink(resultLink.dataset.project, resultLink.dataset.session);
+        if (sidebarLink) {
+            this.setActiveSession(sidebarLink);
+        }
+
+        this.updateSessionUrl(resultLink);
+    }
+
+    updateSessionUrl(link) {
+        const project = link.dataset.project;
+        const session = link.dataset.session;
+        if (!project || !session) return;
+
+        const url = new URL(window.location);
+        url.pathname = '/';
+        url.searchParams.set('project', project);
+        url.searchParams.set('session', session);
+        if (link.dataset.globalResult) {
+            url.searchParams.set('q', new URL(link.href).searchParams.get('search') || '');
+        }
+        window.history.pushState({ project, session }, '', url);
+    }
+
+    setupSidebar() {
+        const activeLink = document.querySelector('.session-link.active');
+        if (activeLink) {
+            this.setActiveSession(activeLink);
+        }
+
+        document.querySelectorAll('[data-session-reveal]').forEach(button => {
+            this.updateRevealButton(button);
+        });
+
+        this.syncSessionFromUrl(false);
+    }
+
+    syncSessionFromUrl(updateFrame = true) {
+        const params = new URLSearchParams(window.location.search);
+        const project = params.get('project');
+        const session = params.get('session');
+        if (!project || !session) return;
+
+        const link = this.findSessionLink(project, session);
+        if (!link) return;
+
+        this.setActiveSession(link);
+
+        const frame = document.querySelector('iframe[name="conversation-frame"]');
+        if (updateFrame && frame && frame.src !== link.href) {
+            frame.src = link.href;
+        }
+    }
+
+    findSessionLink(project, session) {
+        if (!project || !session) return null;
+
+        const selector = `.session-link[data-project="${CSS.escape(project)}"][data-session="${CSS.escape(session)}"]`;
+        return document.querySelector(selector);
+    }
+
+    toggleProject(toggle) {
+        const group = toggle.closest('[data-project-group]');
+        if (!group) return;
+
+        this.setProjectCollapsed(group, !group.classList.contains('collapsed'));
+    }
+
+    setProjectCollapsed(group, collapsed) {
+        group.classList.toggle('collapsed', collapsed);
+        const toggle = group.querySelector('[data-project-toggle]');
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+        }
+    }
+
+    revealMoreSessions(button) {
+        const group = button.closest('[data-project-group]');
+        if (!group) return;
+
+        const hiddenSessions = Array.from(group.querySelectorAll('.session-extra.d-none'));
+        hiddenSessions.slice(0, 4).forEach(link => link.classList.remove('d-none'));
+        this.updateRevealButton(button);
+    }
+
+    updateRevealButton(button) {
+        const group = button.closest('[data-project-group]');
+        if (!group) return;
+
+        const hiddenCount = group.querySelectorAll('.session-extra.d-none').length;
+        button.hidden = hiddenCount === 0;
+        button.textContent = hiddenCount > 4 ? 'Show 4 more' : `Show ${hiddenCount} more`;
     }
 
     setupCodeCopyButtons() {
@@ -156,7 +304,11 @@ class ClaudeViewer {
             
             // Remove URL parameters and redirect
             const url = new URL(window.location);
-            url.search = '';
+            if (document.body.classList.contains('embedded-view')) {
+                url.search = 'embedded=true';
+            } else {
+                url.search = '';
+            }
             window.location.href = url.toString();
         }
     }
