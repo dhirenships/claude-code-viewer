@@ -126,8 +126,11 @@
                             >
                                 <span class="session-link-title">
                                     <i class="bi bi-chat-text"></i>
-                                    Session {{ session.id[:8] }}...
+                                    {{ session.session_name or ('Session ' ~ session.id[:8] ~ '...') }}
                                 </span>
+                                {% if session.session_recap %}
+                                    <span class="session-link-recap">{{ session.session_recap }}</span>
+                                {% endif %}
                                 <span class="session-link-meta">
                                     <span>{{ session.message_count }} messages</span>
                                     <span>

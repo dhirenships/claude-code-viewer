@@ -10,6 +10,8 @@ import html
 class JSONLParser:
     def __init__(self, claude_projects_path: str = None):
         self.claude_projects_path = claude_projects_path or os.path.expanduser("~/.claude/projects")
+        self.claude_home = os.path.dirname(self.claude_projects_path.rstrip(os.sep))
+        self._session_registry = None
     
     def get_projects(self) -> List[Dict]:
         """Scan and return all Claude Code projects"""
@@ -67,6 +69,7 @@ class JSONLParser:
                 
                 # Count messages in file
                 message_count = self._count_messages(file_path)
+                metadata = self._get_session_metadata(file_path, filename.replace('.jsonl', ''))
                 
                 sessions.append({
                     "id": filename.replace('.jsonl', ''),
@@ -74,7 +77,8 @@ class JSONLParser:
                     "path": file_path,
                     "size": file_stats.st_size,
                     "modified": datetime.fromtimestamp(file_stats.st_mtime).isoformat(),
-                    "message_count": message_count
+                    "message_count": message_count,
+                    **metadata
                 })
         
         return sorted(sessions, key=lambda x: x["modified"], reverse=True)
@@ -128,7 +132,8 @@ class JSONLParser:
             "total": total,
             "page": page,
             "per_page": per_page,
-            "total_pages": total_pages
+            "total_pages": total_pages,
+            "metadata": self._get_session_metadata(session_path, session_id)
         }
 
     def search_messages(self, search: str, limit: int = 100) -> Dict:
@@ -413,6 +418,67 @@ class JSONLParser:
                 return sum(1 for line in f if line.strip())
         except:
             return 0
+
+    def _get_session_registry(self) -> Dict:
+        """Read live Claude session metadata from ~/.claude/sessions/*.json."""
+        if self._session_registry is not None:
+            return self._session_registry
+
+        registry = {}
+        sessions_dir = os.path.join(self.claude_home, "sessions")
+        if os.path.isdir(sessions_dir):
+            for filename in os.listdir(sessions_dir):
+                if not filename.endswith(".json"):
+                    continue
+
+                path = os.path.join(sessions_dir, filename)
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except (OSError, json.JSONDecodeError):
+                    continue
+
+                session_id = data.get("sessionId")
+                if session_id:
+                    registry[session_id] = data
+
+        self._session_registry = registry
+        return registry
+
+    def _get_session_metadata(self, file_path: str, session_id: str) -> Dict:
+        """Return display metadata discoverable from Claude's JSON/JSONL stores."""
+        registry_meta = self._get_session_registry().get(session_id, {})
+        custom_title = None
+        slug = None
+        away_summary = None
+        last_prompt = None
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    try:
+                        data = json.loads(line.strip())
+                    except json.JSONDecodeError:
+                        continue
+
+                    custom_title = data.get("customTitle") or custom_title
+                    slug = data.get("slug") or slug
+                    if data.get("type") == "system" and data.get("subtype") == "away_summary":
+                        away_summary = data.get("content") or away_summary
+                    last_prompt = data.get("lastPrompt") or last_prompt
+        except OSError:
+            pass
+
+        if away_summary:
+            away_summary = away_summary.replace(" (disable recaps in /config)", "").strip()
+
+        return {
+            "session_name": registry_meta.get("name") or custom_title or slug,
+            "session_custom_title": custom_title,
+            "session_slug": slug,
+            "session_recap": away_summary,
+            "session_last_prompt": last_prompt,
+        }
     
     def _format_project_name(self, project_dir: str) -> str:
         """Convert project directory name to readable format"""
