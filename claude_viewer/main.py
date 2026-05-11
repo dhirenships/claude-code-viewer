@@ -128,6 +128,11 @@ class LiveClaudeRequest(BaseModel):
     prompt: str
     session_id: Optional[str] = None
 
+class SessionSendRequest(BaseModel):
+    message: str
+    project_name: Optional[str] = None
+    session_id: str
+
 # Custom markdown renderer with syntax highlighting
 def render_markdown_with_code(text: str) -> str:
     """Render markdown with syntax highlighting for code blocks"""
@@ -406,6 +411,264 @@ def _run_live_claude_job(job: Dict[str, Any]) -> None:
 def _format_sse(event: str, data: Dict[str, Any], event_id: int) -> str:
     return f"id: {event_id}\nevent: {event}\ndata: {json.dumps(data)}\n\n"
 
+def _ps_for_pid(pid: int) -> Optional[Dict[str, str]]:
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "pid=,ppid=,tty=,stat=,command="],
+            text=True,
+            capture_output=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    line = result.stdout.strip()
+    if result.returncode != 0 or not line:
+        return None
+
+    parts = line.split(None, 4)
+    if len(parts) < 5:
+        return None
+
+    return {
+        "pid": parts[0],
+        "ppid": parts[1],
+        "tty": parts[2],
+        "stat": parts[3],
+        "command": parts[4],
+    }
+
+def _load_live_claude_registry(session_id: str) -> Optional[Dict[str, Any]]:
+    sessions_dir = Path.home() / ".claude" / "sessions"
+    if not sessions_dir.exists():
+        return None
+
+    matches = []
+    for session_file in sessions_dir.glob("*.json"):
+        try:
+            data = json.loads(session_file.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        if data.get("sessionId") != session_id:
+            continue
+
+        pid = data.get("pid")
+        if not isinstance(pid, int):
+            continue
+
+        ps = _ps_for_pid(pid)
+        if not ps or "claude" not in ps["command"].lower():
+            continue
+
+        data = {**data, "registry_file": str(session_file), "process": ps}
+        matches.append(data)
+
+    if not matches:
+        return None
+
+    return max(matches, key=lambda item: item.get("updatedAt") or 0)
+
+def _load_cmux_target(session_id: str) -> Optional[Dict[str, Any]]:
+    state_file = Path.home() / "Library" / "Application Support" / "cmux" / "session-com.cmuxterm.app.json"
+    if not state_file.exists():
+        return None
+
+    try:
+        state = json.loads(state_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    for window_index, window in enumerate(state.get("windows", []), 1):
+        workspaces = window.get("tabManager", {}).get("workspaces", [])
+        for workspace_index, workspace in enumerate(workspaces, 1):
+            for panel in workspace.get("panels", []):
+                terminal = panel.get("terminal") or {}
+                agent = terminal.get("agent") or {}
+                if agent.get("sessionId") != session_id:
+                    continue
+
+                panel_id = panel.get("id")
+                if not panel_id:
+                    continue
+
+                return {
+                    "transport": "cmux",
+                    "panel_id": panel_id,
+                    "title": panel.get("title") or workspace.get("processTitle") or "",
+                    "tty": terminal.get("ttyName") or panel.get("ttyName") or "",
+                    "workspace_index": workspace_index,
+                    "window_index": window_index,
+                }
+
+    return None
+
+def _list_iterm_ttys() -> Dict[str, Dict[str, str]]:
+    script = """
+set collected to {}
+tell application "iTerm2"
+  repeat with w in windows
+    repeat with t in tabs of w
+      repeat with s in sessions of t
+        set end of collected to ((tty of s) & " | " & (name of s))
+      end repeat
+    end repeat
+  end repeat
+end tell
+set AppleScript's text item delimiters to linefeed
+return collected as text
+"""
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            text=True,
+            capture_output=True,
+            timeout=4,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+
+    if result.returncode != 0:
+        return {}
+
+    sessions: Dict[str, Dict[str, str]] = {}
+    for line in result.stdout.splitlines():
+        tty, separator, title = line.partition(" | ")
+        if separator and tty:
+            sessions[tty] = {"tty": tty, "title": title}
+    return sessions
+
+def _resolve_live_terminal(session_id: str) -> Optional[Dict[str, Any]]:
+    registry = _load_live_claude_registry(session_id)
+    cmux_target = _load_cmux_target(session_id)
+    if cmux_target:
+        return {
+            **cmux_target,
+            "session_id": session_id,
+            "registry": registry,
+            "live": True,
+        }
+
+    if not registry:
+        return None
+
+    tty = registry.get("process", {}).get("tty")
+    if not tty or tty == "??":
+        return {
+            "transport": "process",
+            "session_id": session_id,
+            "registry": registry,
+            "live": True,
+            "reason": "Claude process is live, but no terminal TTY is attached.",
+        }
+
+    tty_path = tty if tty.startswith("/dev/") else f"/dev/{tty}"
+    iterm_sessions = _list_iterm_ttys()
+    if tty_path in iterm_sessions:
+        return {
+            "transport": "iterm2",
+            "session_id": session_id,
+            "tty": tty_path,
+            "title": iterm_sessions[tty_path].get("title", ""),
+            "registry": registry,
+            "live": True,
+        }
+
+    return {
+        "transport": "tty",
+        "session_id": session_id,
+        "tty": tty_path,
+        "registry": registry,
+        "live": True,
+        "reason": "Claude process is live, but the owning terminal app is not supported yet.",
+    }
+
+def _send_to_cmux(panel_id: str, message: str) -> None:
+    script = """
+on run argv
+  set targetId to item 1 of argv
+  set messageText to item 2 of argv
+  tell application "cmux"
+    set targetTerm to missing value
+    repeat with term in terminals
+      if id of term is targetId then
+        set targetTerm to term
+        exit repeat
+      end if
+    end repeat
+    if targetTerm is missing value then error "target cmux terminal not found"
+    input text messageText to targetTerm
+    delay 0.05
+    perform action "text:\\r" on targetTerm
+  end tell
+end run
+"""
+    result = subprocess.run(
+        ["osascript", "-e", script, panel_id, message],
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "cmux send failed")
+
+def _send_to_iterm(tty: str, message: str) -> None:
+    script = """
+on run argv
+  set targetTty to item 1 of argv
+  set messageText to item 2 of argv
+  tell application "iTerm2"
+    set targetSession to missing value
+    repeat with w in windows
+      repeat with t in tabs of w
+        repeat with s in sessions of t
+          if tty of s is targetTty then
+            set targetSession to s
+            exit repeat
+          end if
+        end repeat
+        if targetSession is not missing value then exit repeat
+      end repeat
+      if targetSession is not missing value then exit repeat
+    end repeat
+    if targetSession is missing value then error "target iTerm2 session not found"
+    tell targetSession to write text messageText
+  end tell
+end run
+"""
+    result = subprocess.run(
+        ["osascript", "-e", script, tty, message],
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "iTerm2 send failed")
+
+def _public_terminal_target(target: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not target:
+        return None
+
+    registry = target.get("registry") or {}
+    process = registry.get("process") or {}
+    public = {
+        "live": target.get("live", False),
+        "transport": target.get("transport"),
+        "title": target.get("title") or registry.get("name") or "",
+        "tty": target.get("tty") or process.get("tty") or "",
+        "pid": registry.get("pid"),
+        "status": registry.get("status"),
+        "updated_at": registry.get("updatedAt"),
+        "reason": target.get("reason"),
+    }
+    if target.get("panel_id"):
+        public["panel_id"] = target["panel_id"]
+    return public
+
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def root(
@@ -523,6 +786,7 @@ async def render_conversation_template(
         "project_name": project_name,
         "session_id": session_id,
         "conversation": conversation,
+        "live_terminal": _public_terminal_target(_resolve_live_terminal(session_id)),
         "search": search,
         "message_type": message_type,
         "display_name": parser._format_project_name(project_name),
@@ -676,6 +940,57 @@ async def start_live_claude(request: LiveClaudeRequest):
         "session_id": job["session_id"],
         "project_name": job["project_name"],
         "stream_url": f"/api/live/{job_id}/events",
+    }
+
+@app.get("/api/session-target/{session_id}")
+async def get_session_target(session_id: str):
+    """Resolve a Claude session to the terminal we can send input to, if live."""
+    target = _resolve_live_terminal(session_id)
+    if not target:
+        return {
+            "live": False,
+            "session_id": session_id,
+            "reason": "No live Claude process was found for this session.",
+        }
+
+    return {
+        "session_id": session_id,
+        **(_public_terminal_target(target) or {}),
+    }
+
+@app.post("/api/session-send")
+async def send_session_message(request: SessionSendRequest):
+    """Send text to the live terminal currently running a Claude session."""
+    message = request.message.strip()
+    session_id = request.session_id.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="Session ID is required")
+
+    target = _resolve_live_terminal(session_id)
+    if not target:
+        raise HTTPException(status_code=409, detail="No live Claude terminal was found for this session")
+
+    transport = target.get("transport")
+    try:
+        if transport == "cmux":
+            _send_to_cmux(target["panel_id"], message)
+        elif transport == "iterm2":
+            _send_to_iterm(target["tty"], message)
+        else:
+            reason = target.get("reason") or "This terminal type is not supported yet"
+            raise HTTPException(status_code=409, detail=reason)
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "project_name": request.project_name,
+        "target": _public_terminal_target(target),
     }
 
 @app.get("/api/live/{job_id}/events")

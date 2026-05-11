@@ -94,6 +94,44 @@
     {% endif %}
 </div>
 
+<form
+    class="session-send-form"
+    data-session-send-form
+    data-project="{{ project_name }}"
+    data-session="{{ session_id }}"
+    data-live="{{ 'true' if live_terminal and live_terminal.live and live_terminal.transport in ['cmux', 'iterm2'] else 'false' }}"
+>
+    <div class="session-send-target">
+        {% if live_terminal and live_terminal.live and live_terminal.transport in ['cmux', 'iterm2'] %}
+            <span class="live-dot" aria-hidden="true"></span>
+            <span>
+                {{ live_terminal.transport }}{% if live_terminal.tty %} / {{ live_terminal.tty.replace('/dev/', '') }}{% endif %}
+            </span>
+        {% elif live_terminal and live_terminal.live %}
+            <span>Live, unsupported terminal</span>
+        {% else %}
+            <span>No live terminal</span>
+        {% endif %}
+    </div>
+    <input
+        type="text"
+        name="message"
+        class="session-send-input"
+        placeholder="{{ 'Send to live Claude...' if live_terminal and live_terminal.live and live_terminal.transport in ['cmux', 'iterm2'] else 'Open this Claude session in a supported terminal to send' }}"
+        autocomplete="off"
+        {% if not (live_terminal and live_terminal.live and live_terminal.transport in ['cmux', 'iterm2']) %}disabled{% endif %}
+    >
+    <button
+        type="submit"
+        class="session-send-button"
+        title="Send"
+        {% if not (live_terminal and live_terminal.live and live_terminal.transport in ['cmux', 'iterm2']) %}disabled{% endif %}
+    >
+        <i class="bi bi-send"></i>
+    </button>
+    <span class="session-send-status" data-session-send-status></span>
+</form>
+
 <!-- Messages -->
 {% if conversation.messages %}
     <div class="messages-container terminal-transcript">

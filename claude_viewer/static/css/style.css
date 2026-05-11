@@ -1166,6 +1166,97 @@ code {
     color: #cbd5e1;
 }
 
+.conversation-view {
+    padding-bottom: 3.2rem;
+}
+
+.session-send-form {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 25;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    gap: 0.45rem;
+    align-items: center;
+    padding: 0.45rem 0.65rem;
+    border-top: 1px solid var(--border-color);
+    background: var(--surface-bg);
+    box-shadow: 0 -4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.dark-theme .session-send-form {
+    background: var(--surface-bg);
+    border-color: var(--border-color);
+    box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.session-send-target {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 7.5rem;
+    color: var(--muted-color);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.live-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background: var(--success-color);
+}
+
+.session-send-input {
+    min-width: 0;
+    height: 2rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--input-border);
+    border-radius: 0.35rem;
+    background: var(--surface-bg);
+    color: var(--text-color);
+    font-size: 0.78rem;
+}
+
+.session-send-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.session-send-input:disabled {
+    background: var(--surface-muted);
+    color: var(--muted-color);
+}
+
+.session-send-button {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    border-radius: 0.35rem;
+    background: var(--primary-color);
+    color: white;
+    cursor: pointer;
+}
+
+.session-send-button:disabled {
+    background: var(--secondary-color);
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.session-send-status {
+    min-width: 4.5rem;
+    color: var(--muted-color);
+    font-size: 0.7rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
 /* Pagination */
 .pagination-container {
     display: flex;

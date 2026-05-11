@@ -59,6 +59,13 @@ class ClaudeViewer {
             link.addEventListener('click', (event) => this.handleGlobalResultClick(event, link));
         });
 
+        document.addEventListener('submit', (event) => {
+            const form = event.target.closest?.('[data-session-send-form]');
+            if (form) {
+                this.handleSessionSend(event, form);
+            }
+        });
+
         this.bindSidebarControls(document);
 
         window.addEventListener('popstate', () => this.syncSessionFromUrl());
@@ -440,6 +447,57 @@ class ClaudeViewer {
                 behavior: 'auto',
             });
         });
+    }
+
+    async handleSessionSend(event, form) {
+        event.preventDefault();
+
+        const input = form.querySelector('.session-send-input');
+        const button = form.querySelector('.session-send-button');
+        const message = input?.value.trim();
+        if (!message || form.dataset.live !== 'true') return;
+
+        this.setSessionSendStatus(form, 'sending');
+        if (button) button.disabled = true;
+
+        try {
+            const response = await fetch('/api/session-send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message,
+                    project_name: form.dataset.project || '',
+                    session_id: form.dataset.session || '',
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Send failed');
+            }
+
+            if (input) input.value = '';
+            this.setSessionSendStatus(form, 'sent');
+            window.setTimeout(() => this.refreshConversationHtml({ preserveScroll: true }), 1200);
+        } catch (error) {
+            this.setSessionSendStatus(form, error.message || 'failed');
+        } finally {
+            if (button && form.dataset.live === 'true') button.disabled = false;
+        }
+    }
+
+    setSessionSendStatus(form, status) {
+        const statusEl = form.querySelector('[data-session-send-status]');
+        if (!statusEl) return;
+
+        statusEl.textContent = status;
+        if (status === 'sent') {
+            window.setTimeout(() => {
+                if (statusEl.textContent === 'sent') {
+                    statusEl.textContent = '';
+                }
+            }, 2500);
+        }
     }
 
     async startLiveClaude(event) {
