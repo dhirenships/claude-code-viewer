@@ -132,7 +132,7 @@ class JSONLParser:
             page = (target_index // per_page) + 1 if target_index is not None else None
 
         if page is None:
-            page = total_pages or 1
+            page = 1 if (search or message_type) else total_pages or 1
         else:
             page = min(max(page, 1), total_pages or 1)
 

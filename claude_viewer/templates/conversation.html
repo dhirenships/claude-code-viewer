@@ -151,7 +151,7 @@
 {% if conversation.messages %}
     <div class="messages-container terminal-transcript">
         {% for message in conversation.messages %}
-            <section class="terminal-turn {{ message.role or message.type }}" id="message-line-{{ message.line_number }}">
+            <section class="terminal-turn {{ message.role or message.type }} {{ 'search-target' if target_line and message.line_number == target_line else '' }}" id="message-line-{{ message.line_number }}">
                 <div class="terminal-prompt">
                     {% if message.role == 'user' or message.display_type == 'User' %}
                         <span class="terminal-marker">user</span>

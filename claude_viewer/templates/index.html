@@ -4,8 +4,10 @@
 
 {% block content %}
 {% set total_sessions = projects|sum(attribute='session_count') %}
-{% set selected_project = request.query_params.get('project') %}
-{% set selected_session = request.query_params.get('session') %}
+{% set first_search_result = global_search_results.results[0] if global_search_results and global_search_results.results else none %}
+{% set selected_project = request.query_params.get('project') or (first_search_result.project_name if first_search_result else '') %}
+{% set selected_session = request.query_params.get('session') or (first_search_result.session_id if first_search_result else '') %}
+{% set selected_line = request.query_params.get('line') or (first_search_result.line_number if first_search_result else '') %}
 {% set initial_project = selected_project or (recent_sessions[0].project_name if recent_sessions else '') %}
 {% set initial_session = selected_session or (recent_sessions[0].id if recent_sessions else '') %}
 
@@ -13,6 +15,9 @@
 <div class="sessions-page">
 <div class="global-search-shell">
     <div class="top-tools live-claude-disabled">
+        <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-label="Toggle sessions sidebar" title="Sessions">
+            <i class="bi bi-layout-sidebar-reverse"></i>
+        </button>
         <form class="global-search-form" method="get" action="/">
             <label for="global-search">Search all sessions</label>
             <div class="global-search-row">
@@ -111,6 +116,7 @@
                             target="conversation-frame"
                             data-project="{{ result.project_name }}"
                             data-session="{{ result.session_id }}"
+                            data-line="{{ result.line_number }}"
                             data-global-result
                         >
                             <span class="global-result-meta">
@@ -138,6 +144,8 @@
     {% endif %}
 </div>
 
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
 <div class="home-layout">
     <aside class="session-sidebar" aria-label="Projects and sessions">
         <div class="sidebar-header">
@@ -154,6 +162,9 @@
                     {% endif %}
                 </p>
             </div>
+            <button type="button" class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Close sidebar">
+                <i class="bi bi-x-lg"></i>
+            </button>
         </div>
 
         <div class="project-session-groups">
@@ -237,7 +248,7 @@
                     class="conversation-frame"
                     name="conversation-frame"
                     title="Conversation viewer"
-                    src="/conversation/{{ initial_project }}/{{ initial_session }}?embedded=true{% if global_search and selected_project and selected_session %}&search={{ global_search | urlencode }}{% endif %}"
+                    src="/conversation/{{ initial_project }}/{{ initial_session }}?embedded=true{% if global_search and selected_project and selected_session %}&search={{ global_search | urlencode }}{% if search_filters.role %}&message_type={{ search_filters.role }}{% endif %}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}{% if selected_line %}&line={{ selected_line }}#message-line-{{ selected_line }}{% endif %}{% endif %}"
                 ></iframe>
             {% else %}
                 <div class="conversation-empty-state">

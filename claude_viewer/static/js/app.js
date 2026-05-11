@@ -24,6 +24,7 @@ class ClaudeViewer {
         this.setupSessionShare();
         this.setupLiveClaude();
         this.setupActivityPolling();
+        this.setupMobileSidebar();
     }
 
     setupEventListeners() {
@@ -313,6 +314,52 @@ class ClaudeViewer {
         return document.querySelector('.terminal-turn.search-target');
     }
 
+    setupMobileSidebar() {
+        const overlay = document.getElementById('sidebar-overlay');
+        const sidebar = document.querySelector('.session-sidebar');
+        if (!sidebar) return;
+
+        this._mobileSidebarOverlay = overlay;
+        this._mobileSidebarOpen = () => {
+            const s = document.querySelector('.session-sidebar');
+            s?.classList.add('mobile-open');
+            overlay?.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        };
+        this._mobileSidebarClose = () => {
+            const s = document.querySelector('.session-sidebar');
+            s?.classList.remove('mobile-open');
+            overlay?.classList.remove('active');
+            document.body.style.overflow = '';
+        };
+
+        const toggle = () => {
+            const s = document.querySelector('.session-sidebar');
+            s?.classList.contains('mobile-open') ? this._mobileSidebarClose() : this._mobileSidebarOpen();
+        };
+
+        document.getElementById('sidebar-toggle-btn')?.addEventListener('click', toggle);
+        overlay?.addEventListener('click', this._mobileSidebarClose);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const s = document.querySelector('.session-sidebar');
+                if (s?.classList.contains('mobile-open')) this._mobileSidebarClose();
+            }
+        });
+
+        this.rebindMobileSidebar(sidebar);
+    }
+
+    rebindMobileSidebar(sidebar) {
+        if (!sidebar) return;
+        sidebar.addEventListener('click', (e) => {
+            const link = e.target.closest('.session-link');
+            if (link && window.innerWidth <= 768) this._mobileSidebarClose?.();
+        });
+        document.getElementById('sidebar-close-btn')?.addEventListener('click', () => this._mobileSidebarClose?.());
+    }
+
     setupLiveClaude() {
         const form = document.getElementById('live-claude-form');
         if (!form) return;
@@ -417,9 +464,12 @@ class ClaudeViewer {
         const nextSidebar = doc.querySelector('.session-sidebar');
         if (!nextSidebar) return;
 
+        const wasOpen = currentSidebar.classList.contains('mobile-open');
         currentSidebar.replaceWith(nextSidebar);
+        if (wasOpen) nextSidebar.classList.add('mobile-open');
         this.bindSidebarControls(nextSidebar);
         this.setupSidebar();
+        this.rebindMobileSidebar(nextSidebar);
     }
 
     refreshConversationFrame(options = {}) {
