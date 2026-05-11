@@ -588,6 +588,32 @@ main.container:has(.sessions-page) {
     box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.14);
 }
 
+.session-live-dot.is-busy,
+.live-dot.is-busy {
+    background: var(--warning-color);
+    box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.16);
+    animation: processingPulse 1.2s ease-in-out infinite;
+}
+
+.session-processing-label {
+    color: var(--warning-color);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+@keyframes processingPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.75;
+    }
+    50% {
+        transform: scale(1.35);
+        opacity: 1;
+    }
+}
+
 .session-link-recap {
     display: -webkit-box;
     margin-top: 0.12rem;

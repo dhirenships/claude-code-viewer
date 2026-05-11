@@ -123,9 +123,14 @@
 >
     <div class="session-send-target">
         {% if live_terminal and live_terminal.live and live_terminal.transport in ['cmux', 'iterm2', 'terminal'] %}
-            <span class="live-dot" aria-hidden="true"></span>
+            <span class="live-dot {{ 'is-busy' if live_terminal.status == 'busy' else '' }}" aria-hidden="true"></span>
             <span>
                 {{ live_terminal.transport }}{% if live_terminal.tty %} / {{ live_terminal.tty.replace('/dev/', '') }}{% endif %}
+                {% if live_terminal.status == 'busy' %}
+                    / processing
+                {% elif live_terminal.status %}
+                    / {{ live_terminal.status }}
+                {% endif %}
             </span>
         {% elif live_terminal and live_terminal.live %}
             <span>Live, unsupported terminal</span>

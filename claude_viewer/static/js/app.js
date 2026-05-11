@@ -8,6 +8,7 @@ class ClaudeViewer {
         this.liveAssistantText = '';
         this.activityRevision = null;
         this.activeSessionRevision = null;
+        this.activeLiveStatus = null;
         this.activityTimer = null;
         this.shareTimer = null;
         this.didInitialConversationScroll = false;
@@ -421,6 +422,7 @@ class ClaudeViewer {
             const firstRun = this.activityRevision === null;
             const changed = !firstRun && snapshot.revision !== this.activityRevision;
             const activeRevision = snapshot.active_session?.revision || null;
+            const activeLiveStatus = snapshot.active_live_terminal?.status || null;
             const displayedRevision = this.getDisplayedConversationRevision();
             const activeChanged = Boolean(
                 activeRevision &&
@@ -429,15 +431,17 @@ class ClaudeViewer {
                     (displayedRevision && activeRevision !== displayedRevision)
                 )
             );
+            const activeLiveChanged = !firstRun && activeLiveStatus !== this.activeLiveStatus;
 
             this.activityRevision = snapshot.revision;
             this.activeSessionRevision = activeRevision;
+            this.activeLiveStatus = activeLiveStatus;
 
             if (changed && document.querySelector('.sessions-page')) {
                 await this.refreshSidebarHtml();
             }
 
-            if (activeChanged || (runImmediately && changed)) {
+            if (activeChanged || activeLiveChanged || (runImmediately && changed)) {
                 this.refreshConversationFrame({ preserveScroll: true });
             }
         } catch (error) {

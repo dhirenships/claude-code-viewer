@@ -827,6 +827,19 @@ def _public_terminal_target(target: Optional[Dict[str, Any]]) -> Optional[Dict[s
         public["panel_id"] = target["panel_id"]
     return public
 
+def _live_registry_revision(registries: Dict[str, Dict[str, Any]]) -> str:
+    parts = []
+    for session_id, registry in sorted(registries.items()):
+        parts.append(
+            ":".join([
+                session_id,
+                str(registry.get("pid") or ""),
+                str(registry.get("status") or ""),
+                str(registry.get("updatedAt") or ""),
+            ])
+        )
+    return "|".join(parts)
+
 def _build_live_terminal_index() -> Dict[str, Dict[str, Any]]:
     """Return a session-id keyed snapshot of all live Claude terminal targets."""
     registries = _load_live_claude_registries()
@@ -1238,6 +1251,18 @@ async def get_activity(
     project_count = 0
     latest_session = None
     active_session = None
+    live_registries = _load_live_claude_registries()
+    active_registry = live_registries.get(session) if session else None
+    active_live_terminal = None
+    if active_registry:
+        active_live_terminal = {
+            "live": True,
+            "pid": active_registry.get("pid"),
+            "status": active_registry.get("status"),
+            "updated_at": active_registry.get("updatedAt"),
+            "title": active_registry.get("name") or "",
+        }
+    live_revision = _live_registry_revision(live_registries)
 
     if projects_path.exists():
         for project_entry in projects_path.iterdir():
@@ -1276,9 +1301,11 @@ async def get_activity(
         "total_sessions": total_sessions,
         "latest_mtime_ns": latest_mtime_ns,
         "total_size": total_size,
-        "revision": f"{project_count}:{total_sessions}:{latest_mtime_ns}:{total_size}",
+        "revision": f"{project_count}:{total_sessions}:{latest_mtime_ns}:{total_size}:{live_revision}",
         "latest_session": latest_session,
         "active_session": active_session,
+        "live_revision": live_revision,
+        "active_live_terminal": active_live_terminal,
     }
 
 @app.post("/api/live/start")
