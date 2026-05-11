@@ -109,7 +109,7 @@
                     {% endif %}
                     <span class="terminal-line-meta">line {{ message.line_number }}</span>
                 </div>
-                <pre class="terminal-content">{{ message.content }}</pre>
+                <div class="terminal-content">{{ message.rendered_content | safe }}</div>
             </section>
         {% endfor %}
     </div>

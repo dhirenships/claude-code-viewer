@@ -182,7 +182,8 @@ def process_markdown_text(text: str) -> str:
             formatter = HtmlFormatter(
                 style='github-dark',
                 cssclass='highlight',
-                linenos=False
+                linenos=False,
+                noclasses=True
             )
             
             highlighted = highlight(code, lexer, formatter)

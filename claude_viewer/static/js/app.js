@@ -14,6 +14,7 @@ class ClaudeViewer {
     }
 
     init() {
+        this.applyTheme(this.getSavedTheme());
         this.setupEventListeners();
         this.setupCodeCopyButtons();
         this.setupSearch();
@@ -28,6 +29,11 @@ class ClaudeViewer {
         const themeToggle = document.getElementById('theme-toggle');
         if (themeToggle) {
             themeToggle.addEventListener('click', () => this.toggleTheme());
+        }
+
+        const frame = document.querySelector('iframe[name="conversation-frame"]');
+        if (frame) {
+            frame.addEventListener('load', () => this.syncFrameTheme());
         }
 
         // Search form
@@ -658,17 +664,58 @@ class ClaudeViewer {
         }
     }
 
-    toggleTheme() {
-        const body = document.body;
-        const isDark = body.classList.contains('dark-theme');
-        
-        if (isDark) {
-            body.classList.remove('dark-theme');
-            localStorage.setItem('theme', 'light');
-        } else {
-            body.classList.add('dark-theme');
-            localStorage.setItem('theme', 'dark');
+    getSavedTheme() {
+        return localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
+    }
+
+    applyTheme(theme) {
+        const isDark = theme === 'dark';
+        document.body.classList.toggle('dark-theme', isDark);
+        document.body.classList.toggle('light-theme', !isDark);
+        document.documentElement.classList.toggle('dark-theme', isDark);
+        document.documentElement.classList.toggle('light-theme', !isDark);
+        localStorage.setItem('theme', theme);
+        this.updateThemeToggle(theme);
+        this.syncFrameTheme();
+    }
+
+    updateThemeToggle(theme) {
+        const toggle = document.getElementById('theme-toggle');
+        if (!toggle) return;
+
+        const isDark = theme === 'dark';
+        const icon = toggle.querySelector('[data-theme-icon]');
+        const label = toggle.querySelector('[data-theme-label]');
+        toggle.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+        toggle.setAttribute('title', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+        toggle.classList.toggle('is-dark', isDark);
+        if (icon) {
+            icon.className = isDark ? 'bi bi-sun' : 'bi bi-moon-stars';
         }
+        if (label) {
+            label.textContent = isDark ? 'Light' : 'Dark';
+        }
+    }
+
+    syncFrameTheme() {
+        const frame = document.querySelector('iframe[name="conversation-frame"]');
+        try {
+            if (!frame?.contentDocument?.body) return;
+
+            const theme = this.getSavedTheme();
+            const isDark = theme === 'dark';
+            frame.contentDocument.body.classList.toggle('dark-theme', isDark);
+            frame.contentDocument.body.classList.toggle('light-theme', !isDark);
+            frame.contentDocument.documentElement.classList.toggle('dark-theme', isDark);
+            frame.contentDocument.documentElement.classList.toggle('light-theme', !isDark);
+        } catch {
+            // The iframe is same-origin in normal use; ignore transient access errors.
+        }
+    }
+
+    toggleTheme() {
+        const nextTheme = this.getSavedTheme() === 'dark' ? 'light' : 'dark';
+        this.applyTheme(nextTheme);
     }
 
     copyCode(codeBlock) {
@@ -825,12 +872,6 @@ class ClaudeViewer {
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Load saved theme
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark') {
-        document.body.classList.add('dark-theme');
-    }
-
     // Initialize the main app
     window.claudeViewer = new ClaudeViewer();
     
