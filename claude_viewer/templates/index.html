@@ -12,7 +12,7 @@
 {% if projects %}
 <div class="sessions-page">
 <div class="global-search-shell">
-    <div class="top-tools">
+    <div class="top-tools live-claude-disabled">
         <form class="global-search-form" method="get" action="/">
             <label for="global-search">Search all sessions</label>
             <div class="global-search-row">
@@ -68,7 +68,8 @@
             </div>
         </form>
 
-        <form class="live-claude-form" id="live-claude-form">
+        {# Live Claude streaming is hidden for now. See docs/live-claude-streaming-concept.md. #}
+        <form class="live-claude-form" id="live-claude-form" hidden aria-hidden="true">
             <label for="live-claude-prompt">Live Claude</label>
             <div class="live-claude-row">
                 <input
@@ -84,6 +85,11 @@
             </div>
             <div class="live-claude-status" id="live-claude-status">idle</div>
         </form>
+
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark theme" title="Switch theme">
+            <i class="bi bi-moon-stars" data-theme-icon></i>
+            <span data-theme-label>Dark</span>
+        </button>
     </div>
 
     {% if global_search %}
