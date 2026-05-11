@@ -910,6 +910,55 @@ def _annotate_projects_with_live_targets(
                 live_count += 1
         project["live_session_count"] = live_count
 
+def _filter_projects_to_matching_sessions(
+    projects: List[Dict[str, Any]],
+    search_results: Optional[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Return only projects/sessions that produced global search matches."""
+    if not search_results:
+        return projects
+
+    matching_sessions = {
+        (match["project_name"], match["session_id"])
+        for match in search_results.get("matching_sessions", [])
+    }
+    if not matching_sessions:
+        return []
+
+    first_match_lines = {}
+    for result in search_results.get("results", []):
+        key = (result["project_name"], result["session_id"])
+        first_match_lines.setdefault(key, result["line_number"])
+
+    filtered_projects = []
+    for project in projects:
+        sessions = []
+        for session in project.get("sessions", []):
+            key = (project["name"], session["id"])
+            if key not in matching_sessions:
+                continue
+
+            session_entry = {**session}
+            if key in first_match_lines:
+                session_entry["search_line"] = first_match_lines[key]
+            sessions.append(session_entry)
+
+        if not sessions:
+            continue
+
+        filtered_project = {
+            **project,
+            "sessions": sessions,
+            "session_count": len(sessions),
+            "live_session_count": sum(
+                1 for session in sessions
+                if session.get("live_terminal") and session["live_terminal"].get("live")
+            ),
+        }
+        filtered_projects.append(filtered_project)
+
+    return filtered_projects
+
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def root(
@@ -926,9 +975,9 @@ async def root(
 ):
     """Main page showing all projects"""
     parser = get_parser()
-    projects = parser.get_projects_with_sessions()
+    all_projects = parser.get_projects_with_sessions()
     live_index = _build_live_terminal_index()
-    _annotate_projects_with_live_targets(projects, live_index)
+    _annotate_projects_with_live_targets(all_projects, live_index)
     global_search = (q or "").strip()
     search_filters = build_search_filters(
         project_filter,
@@ -943,6 +992,10 @@ async def root(
     global_search_results = (
         parser.search_messages(global_search, filters=search_filters)
         if global_search else None
+    )
+    projects = (
+        _filter_projects_to_matching_sessions(all_projects, global_search_results)
+        if global_search else all_projects
     )
     recent_sessions = [
         {
@@ -962,8 +1015,9 @@ async def root(
     return templates.TemplateResponse("index.html", {
         "request": request,
         "projects": projects,
+        "filter_projects": all_projects,
         "recent_sessions": recent_sessions,
-        "live_session_count": len(live_index),
+        "live_session_count": sum(project.get("live_session_count", 0) for project in projects),
         "global_search": global_search,
         "global_search_results": global_search_results,
         "search_filters": search_filters,
@@ -1074,6 +1128,7 @@ async def render_conversation_template(
     per_page: int,
     search: Optional[str],
     message_type: Optional[str],
+    highlight: Optional[str] = None,
     target_line: Optional[int] = None,
     show_tools: bool = False,
     embedded: bool = False
@@ -1091,7 +1146,7 @@ async def render_conversation_template(
     for message in conversation["messages"]:
         if message.get("content"):
             rendered_content = render_markdown_with_code(message["content"])
-            message["rendered_content"] = highlight_rendered_search(rendered_content, search)
+            message["rendered_content"] = highlight_rendered_search(rendered_content, highlight or search)
 
     return templates.TemplateResponse("conversation.html", {
         "request": request,
@@ -1101,8 +1156,10 @@ async def render_conversation_template(
         "live_terminal": _public_terminal_target(_resolve_live_terminal(session_id)),
         "share_url": _session_share_url(request, session_id),
         "search": search,
+        "highlight": highlight,
         "message_type": message_type,
         "target_line": target_line,
+        "show_tools": show_tools,
         "display_name": parser._format_project_name(project_name),
         "embedded": embedded,
     })
@@ -1116,13 +1173,14 @@ async def conversation_view(
     per_page: int = Query(50, le=200, ge=10),
     search: Optional[str] = Query(None),
     message_type: Optional[str] = Query(None),
+    highlight: Optional[str] = Query(None),
     line: Optional[int] = Query(None, ge=1),
     show_tools: bool = Query(False),
     embedded: bool = Query(False)
 ):
     """Conversation viewer page"""
     return await render_conversation_template(
-        request, project_name, session_id, page, per_page, search, message_type, line, show_tools, embedded
+        request, project_name, session_id, page, per_page, search, message_type, highlight, line, show_tools, embedded
     )
 
 @app.get("/embedded/conversation/{project_name}/{session_id}", response_class=HTMLResponse)
@@ -1134,12 +1192,13 @@ async def embedded_conversation_view(
     per_page: int = Query(50, le=200, ge=10),
     search: Optional[str] = Query(None),
     message_type: Optional[str] = Query(None),
+    highlight: Optional[str] = Query(None),
     line: Optional[int] = Query(None, ge=1),
     show_tools: bool = Query(False)
 ):
     """Conversation viewer for the homepage right pane."""
     return await render_conversation_template(
-        request, project_name, session_id, page, per_page, search, message_type, line, show_tools, True
+        request, project_name, session_id, page, per_page, search, message_type, highlight, line, show_tools, True
     )
 
 @app.get("/api/conversation/{project_name}/{session_id}", response_model=ConversationResponse)

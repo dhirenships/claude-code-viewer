@@ -11,7 +11,7 @@
 {% set initial_project = selected_project or (recent_sessions[0].project_name if recent_sessions else '') %}
 {% set initial_session = selected_session or (recent_sessions[0].id if recent_sessions else '') %}
 
-{% if projects %}
+{% if filter_projects %}
 <div class="sessions-page">
 <div class="global-search-shell">
     <div class="top-tools live-claude-disabled">
@@ -41,7 +41,7 @@
             <div class="global-search-filters">
                 <select name="project_filter" aria-label="Project filter">
                     <option value="">All projects</option>
-                    {% for project in projects %}
+                    {% for project in filter_projects %}
                         <option value="{{ project.name }}" {{ 'selected' if search_filters.project == project.name else '' }}>
                             {{ project.display_name }}
                         </option>
@@ -112,7 +112,7 @@
                     {% for result in global_search_results.results %}
                         <a
                             class="global-result"
-                            href="/conversation/{{ result.project_name }}/{{ result.session_id }}?embedded=true&search={{ global_search | urlencode }}{% if search_filters.role %}&message_type={{ search_filters.role }}{% endif %}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}&line={{ result.line_number }}#message-line-{{ result.line_number }}"
+                            href="/conversation/{{ result.project_name }}/{{ result.session_id }}?embedded=true&highlight={{ global_search | urlencode }}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}&line={{ result.line_number }}#message-line-{{ result.line_number }}"
                             target="conversation-frame"
                             data-project="{{ result.project_name }}"
                             data-session="{{ result.session_id }}"
@@ -193,10 +193,14 @@
                             {% set is_last_active_day = session.modified[:10] == latest_day %}
                             <a
                                 class="session-link {{ '' if is_last_active_day else 'session-extra d-none' }} {{ 'active' if session.id == initial_session and project.name == initial_project else '' }}"
-                                href="/conversation/{{ project.name }}/{{ session.id }}?embedded=true"
+                                href="/conversation/{{ project.name }}/{{ session.id }}?embedded=true{% if global_search and session.search_line %}&highlight={{ global_search | urlencode }}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}&line={{ session.search_line }}#message-line-{{ session.search_line }}{% endif %}"
                                 target="conversation-frame"
                                 data-project="{{ project.name }}"
                                 data-session="{{ session.id }}"
+                                {% if global_search and session.search_line %}
+                                    data-line="{{ session.search_line }}"
+                                    data-search-result-session
+                                {% endif %}
                             >
                                 <span class="session-link-title">
                                     <i class="bi bi-chat-text"></i>
@@ -248,7 +252,7 @@
                     class="conversation-frame"
                     name="conversation-frame"
                     title="Conversation viewer"
-                    src="/conversation/{{ initial_project }}/{{ initial_session }}?embedded=true{% if global_search and selected_project and selected_session %}&search={{ global_search | urlencode }}{% if search_filters.role %}&message_type={{ search_filters.role }}{% endif %}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}{% if selected_line %}&line={{ selected_line }}#message-line-{{ selected_line }}{% endif %}{% endif %}"
+                    src="/conversation/{{ initial_project }}/{{ initial_session }}?embedded=true{% if global_search and selected_project and selected_session %}&highlight={{ global_search | urlencode }}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}{% if selected_line %}&line={{ selected_line }}#message-line-{{ selected_line }}{% endif %}{% endif %}"
                 ></iframe>
             {% else %}
                 <div class="conversation-empty-state">

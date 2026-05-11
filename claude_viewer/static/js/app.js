@@ -144,8 +144,8 @@ class ClaudeViewer {
         url.searchParams.set('project', project);
         url.searchParams.set('session', session);
 
-        if (link.dataset.globalResult) {
-            const search = linkUrl.searchParams.get('search') || '';
+        if (link.dataset.globalResult || link.dataset.searchResultSession) {
+            const search = linkUrl.searchParams.get('highlight') || linkUrl.searchParams.get('search') || '';
             if (search) url.searchParams.set('q', search);
 
             const line = link.dataset.line || linkUrl.searchParams.get('line') || '';
@@ -287,7 +287,7 @@ class ClaudeViewer {
         }
 
         const params = new URLSearchParams(window.location.search);
-        if (params.get('search')) return;
+        if (params.get('search') || params.get('highlight')) return;
 
         requestAnimationFrame(() => {
             window.scrollTo({

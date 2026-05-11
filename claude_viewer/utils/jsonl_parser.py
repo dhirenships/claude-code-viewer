@@ -203,6 +203,14 @@ class JSONLParser:
             "total": total,
             "limit": limit,
             "indexed_messages": len(entries),
+            "matching_sessions": [
+                {
+                    "project_name": project_name,
+                    "session_id": session_id,
+                    "count": count,
+                }
+                for (project_name, session_id), count in session_match_count.items()
+            ],
         }
 
     def _get_search_index(self) -> List[Dict]:

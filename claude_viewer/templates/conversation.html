@@ -201,7 +201,7 @@
                 <!-- Previous page -->
                 {% if conversation.page > 1 %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ conversation.page - 1 }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">
+                        <a class="page-link" href="?page={{ conversation.page - 1 }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">
                             <i class="bi bi-chevron-left"></i>
                         </a>
                     </li>
@@ -219,7 +219,7 @@
                 
                 {% if start_page > 1 %}
                     <li class="page-item">
-                        <a class="page-link" href="?page=1{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">1</a>
+                        <a class="page-link" href="?page=1{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">1</a>
                     </li>
                     {% if start_page > 2 %}
                         <li class="page-item disabled">
@@ -235,7 +235,7 @@
                         </li>
                     {% else %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_num }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">{{ page_num }}</a>
+                            <a class="page-link" href="?page={{ page_num }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">{{ page_num }}</a>
                         </li>
                     {% endif %}
                 {% endfor %}
@@ -247,14 +247,14 @@
                         </li>
                     {% endif %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ conversation.total_pages }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">{{ conversation.total_pages }}</a>
+                        <a class="page-link" href="?page={{ conversation.total_pages }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">{{ conversation.total_pages }}</a>
                     </li>
                 {% endif %}
                 
                 <!-- Next page -->
                 {% if conversation.page < conversation.total_pages %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ conversation.page + 1 }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">
+                        <a class="page-link" href="?page={{ conversation.page + 1 }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">
                             <i class="bi bi-chevron-right"></i>
                         </a>
                     </li>
