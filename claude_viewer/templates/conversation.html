@@ -26,6 +26,12 @@
 {% endblock %}
 
 {% block content %}
+<div
+    class="conversation-view"
+    data-project="{{ project_name }}"
+    data-session="{{ session_id }}"
+    data-file-revision="{{ conversation.file_revision or '' }}"
+>
 <div class="search-filters">
     <form id="search-form" method="get">
         {% if embedded %}
@@ -210,4 +216,5 @@
         </nav>
     </div>
 {% endif %}
+</div>
 {% endblock %}

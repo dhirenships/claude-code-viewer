@@ -582,6 +582,63 @@ async def get_conversation(
     
     return ConversationResponse(**conversation)
 
+@app.get("/api/activity")
+async def get_activity(
+    project: Optional[str] = Query(None),
+    session: Optional[str] = Query(None),
+):
+    """Cheap JSONL activity snapshot for low-CPU UI refresh polling."""
+    parser = get_parser()
+    projects_path = Path(parser.claude_projects_path)
+    total_sessions = 0
+    total_size = 0
+    latest_mtime_ns = 0
+    project_count = 0
+    latest_session = None
+    active_session = None
+
+    if projects_path.exists():
+        for project_entry in projects_path.iterdir():
+            if not project_entry.is_dir():
+                continue
+
+            project_count += 1
+            for session_entry in project_entry.glob("*.jsonl"):
+                try:
+                    stat = session_entry.stat()
+                except OSError:
+                    continue
+
+                total_sessions += 1
+                total_size += stat.st_size
+                if stat.st_mtime_ns > latest_mtime_ns:
+                    latest_mtime_ns = stat.st_mtime_ns
+                    latest_session = {
+                        "project": project_entry.name,
+                        "session": session_entry.stem,
+                        "modified_ns": stat.st_mtime_ns,
+                        "size": stat.st_size,
+                    }
+
+                if project_entry.name == project and session_entry.stem == session:
+                    active_session = {
+                        "project": project_entry.name,
+                        "session": session_entry.stem,
+                        "modified_ns": stat.st_mtime_ns,
+                        "size": stat.st_size,
+                        "revision": f"{stat.st_mtime_ns}:{stat.st_size}",
+                    }
+
+    return {
+        "project_count": project_count,
+        "total_sessions": total_sessions,
+        "latest_mtime_ns": latest_mtime_ns,
+        "total_size": total_size,
+        "revision": f"{project_count}:{total_sessions}:{latest_mtime_ns}:{total_size}",
+        "latest_session": latest_session,
+        "active_session": active_session,
+    }
+
 @app.post("/api/live/start")
 async def start_live_claude(request: LiveClaudeRequest):
     """Start a Claude CLI turn and stream its partial message events."""

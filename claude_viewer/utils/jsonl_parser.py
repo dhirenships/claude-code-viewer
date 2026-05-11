@@ -102,6 +102,7 @@ class JSONLParser:
         
         if not os.path.exists(session_path):
             return {"messages": [], "total": 0, "page": page or 1, "per_page": per_page, "total_pages": 0}
+        file_stats = os.stat(session_path)
         
         messages = []
         with open(session_path, 'r', encoding='utf-8') as f:
@@ -145,6 +146,7 @@ class JSONLParser:
             "page": page,
             "per_page": per_page,
             "total_pages": total_pages,
+            "file_revision": f"{file_stats.st_mtime_ns}:{file_stats.st_size}",
             "metadata": self._get_session_metadata(session_path, session_id)
         }
 

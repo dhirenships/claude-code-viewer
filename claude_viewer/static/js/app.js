@@ -6,6 +6,10 @@ class ClaudeViewer {
         this.liveSessionId = null;
         this.liveAssistantContent = null;
         this.liveAssistantText = '';
+        this.activityRevision = null;
+        this.activeSessionRevision = null;
+        this.activityTimer = null;
+        this.didInitialConversationScroll = false;
         this.init();
     }
 
@@ -16,6 +20,7 @@ class ClaudeViewer {
         this.setupSidebar();
         this.setupConversationScroll();
         this.setupLiveClaude();
+        this.setupActivityPolling();
     }
 
     setupEventListeners() {
@@ -43,27 +48,31 @@ class ClaudeViewer {
             filter.addEventListener('change', () => this.autoSubmitFilters());
         });
 
-        const sessionLinks = document.querySelectorAll('.session-link[target="conversation-frame"]');
-        sessionLinks.forEach(link => {
-            link.addEventListener('click', (event) => this.handleSessionClick(event, link));
-        });
-
         const globalResults = document.querySelectorAll('[data-global-result][target="conversation-frame"]');
         globalResults.forEach(link => {
             link.addEventListener('click', (event) => this.handleGlobalResultClick(event, link));
         });
 
-        const projectToggles = document.querySelectorAll('[data-project-toggle]');
+        this.bindSidebarControls(document);
+
+        window.addEventListener('popstate', () => this.syncSessionFromUrl());
+    }
+
+    bindSidebarControls(root) {
+        const sessionLinks = root.querySelectorAll('.session-link[target="conversation-frame"]');
+        sessionLinks.forEach(link => {
+            link.addEventListener('click', (event) => this.handleSessionClick(event, link));
+        });
+
+        const projectToggles = root.querySelectorAll('[data-project-toggle]');
         projectToggles.forEach(toggle => {
             toggle.addEventListener('click', () => this.toggleProject(toggle));
         });
 
-        const revealButtons = document.querySelectorAll('[data-session-reveal]');
+        const revealButtons = root.querySelectorAll('[data-session-reveal]');
         revealButtons.forEach(button => {
             button.addEventListener('click', () => this.revealMoreSessions(button));
         });
-
-        window.addEventListener('popstate', () => this.syncSessionFromUrl());
     }
 
     setActiveSession(activeLink) {
@@ -228,7 +237,9 @@ class ClaudeViewer {
 
     setupConversationScroll() {
         const messagesContainer = document.querySelector('.messages-container');
-        if (!messagesContainer || window.location.hash) return;
+        if (!messagesContainer || window.location.hash || this.didInitialConversationScroll) return;
+
+        this.didInitialConversationScroll = true;
 
         requestAnimationFrame(() => {
             window.scrollTo({
@@ -243,6 +254,186 @@ class ClaudeViewer {
         if (!form) return;
 
         form.addEventListener('submit', (event) => this.startLiveClaude(event));
+    }
+
+    setupActivityPolling() {
+        if (!document.querySelector('.sessions-page') && !document.querySelector('.conversation-view')) return;
+
+        this.pollActivity();
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                this.pollActivity(true);
+            }
+        });
+    }
+
+    scheduleActivityPoll() {
+        window.clearTimeout(this.activityTimer);
+        const delay = document.hidden ? 30000 : 6000;
+        this.activityTimer = window.setTimeout(() => this.pollActivity(), delay);
+    }
+
+    async pollActivity(runImmediately = false) {
+        window.clearTimeout(this.activityTimer);
+
+        try {
+            const active = this.getActiveSessionInfo();
+            const params = new URLSearchParams();
+            if (active.project) params.set('project', active.project);
+            if (active.session) params.set('session', active.session);
+
+            const response = await fetch(`/api/activity?${params.toString()}`, {
+                cache: 'no-store',
+            });
+            if (!response.ok) throw new Error('Activity check failed');
+
+            const snapshot = await response.json();
+            const firstRun = this.activityRevision === null;
+            const changed = !firstRun && snapshot.revision !== this.activityRevision;
+            const activeRevision = snapshot.active_session?.revision || null;
+            const displayedRevision = this.getDisplayedConversationRevision();
+            const activeChanged = Boolean(
+                activeRevision &&
+                (
+                    (this.activeSessionRevision && activeRevision !== this.activeSessionRevision) ||
+                    (displayedRevision && activeRevision !== displayedRevision)
+                )
+            );
+
+            this.activityRevision = snapshot.revision;
+            this.activeSessionRevision = activeRevision;
+
+            if (changed && document.querySelector('.sessions-page')) {
+                await this.refreshSidebarHtml();
+            }
+
+            if (activeChanged || (runImmediately && changed)) {
+                this.refreshConversationFrame({ preserveScroll: true });
+            }
+        } catch (error) {
+            // Keep polling quiet; this is a convenience path, not core navigation.
+        } finally {
+            this.scheduleActivityPoll();
+        }
+    }
+
+    getActiveSessionInfo() {
+        const params = new URLSearchParams(window.location.search);
+        const activeLink = document.querySelector('.session-link.active');
+        const conversationView = document.querySelector('.conversation-view');
+
+        return {
+            project: params.get('project') || activeLink?.dataset.project || conversationView?.dataset.project || '',
+            session: params.get('session') || activeLink?.dataset.session || conversationView?.dataset.session || '',
+        };
+    }
+
+    getDisplayedConversationRevision() {
+        const frame = document.querySelector('iframe[name="conversation-frame"]');
+        if (frame?.contentDocument) {
+            const framedView = frame.contentDocument.querySelector('.conversation-view');
+            if (framedView?.dataset.fileRevision) {
+                return framedView.dataset.fileRevision;
+            }
+        }
+
+        const conversationView = document.querySelector('.conversation-view');
+        return conversationView?.dataset.fileRevision || null;
+    }
+
+    async refreshSidebarHtml() {
+        const currentSidebar = document.querySelector('.session-sidebar');
+        if (!currentSidebar) return;
+
+        const response = await fetch(window.location.href, { cache: 'no-store' });
+        if (!response.ok) return;
+
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const nextSidebar = doc.querySelector('.session-sidebar');
+        if (!nextSidebar) return;
+
+        currentSidebar.replaceWith(nextSidebar);
+        this.bindSidebarControls(nextSidebar);
+        this.setupSidebar();
+    }
+
+    refreshConversationFrame(options = {}) {
+        const panel = document.getElementById('live-claude-panel');
+        if (panel && !panel.classList.contains('d-none')) return;
+
+        const frame = document.querySelector('iframe[name="conversation-frame"]');
+        if (!frame || !frame.src) {
+            this.refreshConversationHtml({ preserveScroll: true, ...options });
+            return;
+        }
+
+        const childViewer = frame.contentWindow?.claudeViewer;
+        if (childViewer?.refreshConversationHtml) {
+            childViewer.refreshConversationHtml({ preserveScroll: true, ...options });
+            return;
+        }
+
+        // Last-resort fallback for cross-origin or not-yet-initialized frames.
+        // This should be rare; the normal path updates the iframe DOM in place.
+        const url = new URL(frame.src);
+        url.searchParams.set('_refresh', String(Date.now()));
+        url.searchParams.set('_preserve_scroll', 'true');
+        frame.src = url.toString();
+    }
+
+    async refreshConversationHtml(options = {}) {
+        const conversationView = document.querySelector('.conversation-view');
+        if (!conversationView) return;
+
+        const wasNearBottom = this.isNearPageBottom();
+        const previousScrollY = window.scrollY;
+        const previousHeight = document.documentElement.scrollHeight;
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('_refresh', String(Date.now()));
+        const response = await fetch(url.toString(), { cache: 'no-store' });
+        if (!response.ok) return;
+
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const nextConversationView = doc.querySelector('.conversation-view');
+        if (!nextConversationView) return;
+
+        conversationView.replaceWith(nextConversationView);
+        this.setupCodeCopyButtons();
+        this.setupPagination();
+        this.restoreConversationScroll({
+            preserveScroll: options.preserveScroll !== false,
+            wasNearBottom,
+            previousScrollY,
+            previousHeight,
+        });
+    }
+
+    isNearPageBottom(threshold = 120) {
+        return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - threshold;
+    }
+
+    restoreConversationScroll({ preserveScroll, wasNearBottom, previousScrollY, previousHeight }) {
+        if (!preserveScroll) {
+            this.setupConversationScroll();
+            return;
+        }
+
+        requestAnimationFrame(() => {
+            const newHeight = document.documentElement.scrollHeight;
+            if (wasNearBottom) {
+                window.scrollTo({ top: newHeight, behavior: 'auto' });
+                return;
+            }
+
+            const heightDelta = newHeight - previousHeight;
+            window.scrollTo({
+                top: Math.max(previousScrollY + heightDelta, 0),
+                behavior: 'auto',
+            });
+        });
     }
 
     async startLiveClaude(event) {
