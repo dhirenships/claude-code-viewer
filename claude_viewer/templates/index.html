@@ -33,6 +33,39 @@
                     </a>
                 {% endif %}
             </div>
+            <div class="global-search-filters">
+                <select name="project_filter" aria-label="Project filter">
+                    <option value="">All projects</option>
+                    {% for project in projects %}
+                        <option value="{{ project.name }}" {{ 'selected' if search_filters.project == project.name else '' }}>
+                            {{ project.display_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <select name="role" aria-label="Role filter">
+                    <option value="">User + Claude</option>
+                    <option value="user" {{ 'selected' if search_filters.role == 'user' else '' }}>User only</option>
+                    <option value="assistant" {{ 'selected' if search_filters.role == 'assistant' else '' }}>Claude only</option>
+                </select>
+                <input type="date" name="date_from" value="{{ search_filters.date_from or '' }}" aria-label="From date">
+                <input type="date" name="date_to" value="{{ search_filters.date_to or '' }}" aria-label="To date">
+                <label class="global-filter-check">
+                    <input type="checkbox" name="has_code" value="1" {{ 'checked' if search_filters.has_code else '' }}>
+                    Code
+                </label>
+                <label class="global-filter-check">
+                    <input type="checkbox" name="has_errors" value="1" {{ 'checked' if search_filters.has_errors else '' }}>
+                    Errors
+                </label>
+                <label class="global-filter-check">
+                    <input type="checkbox" name="has_tools" value="1" {{ 'checked' if search_filters.has_tools else '' }}>
+                    Tools
+                </label>
+                <label class="global-filter-check">
+                    <input type="checkbox" name="has_file_edits" value="1" {{ 'checked' if search_filters.has_file_edits else '' }}>
+                    Edits
+                </label>
+            </div>
         </form>
 
         <form class="live-claude-form" id="live-claude-form">
@@ -57,6 +90,7 @@
         <div class="global-search-results">
             <div class="global-search-summary">
                 <span>{{ global_search_results.total }} result{{ 's' if global_search_results.total != 1 else '' }} for "{{ global_search }}"</span>
+                <span>{{ global_search_results.indexed_messages }} indexed messages</span>
                 {% if global_search_results.total > global_search_results.limit %}
                     <span>Showing first {{ global_search_results.limit }}</span>
                 {% endif %}
@@ -67,7 +101,7 @@
                     {% for result in global_search_results.results %}
                         <a
                             class="global-result"
-                            href="/conversation/{{ result.project_name }}/{{ result.session_id }}?embedded=true&search={{ global_search | urlencode }}{% if result.page > 1 %}&page={{ result.page }}{% endif %}#message-line-{{ result.line_number }}"
+                            href="/conversation/{{ result.project_name }}/{{ result.session_id }}?embedded=true&search={{ global_search | urlencode }}{% if search_filters.role %}&message_type={{ search_filters.role }}{% endif %}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}&line={{ result.line_number }}#message-line-{{ result.line_number }}"
                             target="conversation-frame"
                             data-project="{{ result.project_name }}"
                             data-session="{{ result.session_id }}"

@@ -1,6 +1,6 @@
 import json
 import os
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, Any
 from pathlib import Path
 import re
 from datetime import datetime
@@ -12,6 +12,8 @@ class JSONLParser:
         self.claude_projects_path = claude_projects_path or os.path.expanduser("~/.claude/projects")
         self.claude_home = os.path.dirname(self.claude_projects_path.rstrip(os.sep))
         self._session_registry = None
+        self._search_index_signature = None
+        self._search_index = []
     
     def get_projects(self) -> List[Dict]:
         """Scan and return all Claude Code projects"""
@@ -90,7 +92,9 @@ class JSONLParser:
         page: Optional[int] = 1,
         per_page: int = 50,
         search: Optional[str] = None,
-        message_type: Optional[str] = None
+        message_type: Optional[str] = None,
+        target_line: Optional[int] = None,
+        include_tools: bool = False
     ) -> Dict:
         """Get paginated conversation data with optional filtering"""
         
@@ -106,10 +110,10 @@ class JSONLParser:
                     data = json.loads(line.strip())
                     
                     # Parse different message types
-                    parsed_message = self._parse_message(data, line_num)
+                    parsed_message = self._parse_message(data, line_num, include_tools)
                     
                     # Apply filters
-                    if self._should_include_message(parsed_message, search, message_type):
+                    if self._should_include_message(parsed_message, search, message_type, include_tools):
                         messages.append(parsed_message)
                         
                 except json.JSONDecodeError:
@@ -118,6 +122,14 @@ class JSONLParser:
         # Pagination
         total = len(messages)
         total_pages = (total + per_page - 1) // per_page
+        if target_line:
+            target_index = next(
+                (index for index, message in enumerate(messages)
+                 if message.get("line_number") == target_line),
+                None,
+            )
+            page = (target_index // per_page) + 1 if target_index is not None else None
+
         if page is None:
             page = total_pages or 1
         else:
@@ -136,15 +148,92 @@ class JSONLParser:
             "metadata": self._get_session_metadata(session_path, session_id)
         }
 
-    def search_messages(self, search: str, limit: int = 100) -> Dict:
+    def search_messages(
+        self,
+        search: str,
+        limit: int = 100,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> Dict:
         """Search user and assistant messages across every session."""
         search = (search or "").strip()
         if not search:
             return {"results": [], "total": 0, "limit": limit}
 
-        projects = self.get_projects_with_sessions()
+        entries = self._get_search_index()
         results = []
         total = 0
+        search_text = search.lower()
+        filters = filters or {}
+        session_match_count = {}
+
+        for entry in entries:
+            if search_text not in entry["search_text"]:
+                continue
+
+            if entry.get("is_tool_only") and not (
+                filters.get("has_tools") or filters.get("has_file_edits")
+            ):
+                continue
+
+            if not self._entry_matches_filters(entry, filters):
+                continue
+
+            session_key = (entry["project_name"], entry["session_id"])
+            session_match_count[session_key] = session_match_count.get(session_key, 0) + 1
+            total += 1
+            if len(results) >= limit:
+                continue
+
+            results.append({
+                "project_name": entry["project_name"],
+                "project_display_name": entry["project_display_name"],
+                "session_id": entry["session_id"],
+                "session_modified": entry["session_modified"],
+                "line_number": entry["line_number"],
+                "page": ((session_match_count[session_key] - 1) // 50) + 1,
+                "role": entry["role"],
+                "timestamp": entry["timestamp"],
+                "snippet": self._make_search_snippet(entry["content"], search),
+            })
+
+        return {
+            "results": results,
+            "total": total,
+            "limit": limit,
+            "indexed_messages": len(entries),
+        }
+
+    def _get_search_index(self) -> List[Dict]:
+        signature = self._get_search_index_signature()
+        if signature == self._search_index_signature:
+            return self._search_index
+
+        self._search_index = self._build_search_index()
+        self._search_index_signature = signature
+        return self._search_index
+
+    def _get_search_index_signature(self) -> Tuple:
+        files = []
+        if not os.path.isdir(self.claude_projects_path):
+            return tuple()
+
+        for root, _, filenames in os.walk(self.claude_projects_path):
+            for filename in filenames:
+                if not filename.endswith(".jsonl"):
+                    continue
+
+                path = os.path.join(root, filename)
+                try:
+                    stat = os.stat(path)
+                except OSError:
+                    continue
+                files.append((path, stat.st_mtime_ns, stat.st_size))
+
+        return tuple(sorted(files))
+
+    def _build_search_index(self) -> List[Dict]:
+        projects = self.get_projects_with_sessions()
+        entries = []
 
         for project in projects:
             for session in project["sessions"]:
@@ -157,7 +246,6 @@ class JSONLParser:
                 if not os.path.exists(session_path):
                     continue
 
-                session_match_count = 0
                 with open(session_path, 'r', encoding='utf-8') as f:
                     for line_num, line in enumerate(f, 1):
                         try:
@@ -165,30 +253,74 @@ class JSONLParser:
                         except json.JSONDecodeError:
                             continue
 
-                        message = self._parse_message(data, line_num)
-                        if not self._should_include_message(message, search, None):
+                        message = self._parse_message(data, line_num, include_tools=True)
+                        if not self._should_include_message(message, None, None, include_tools=True):
                             continue
 
-                        session_match_count += 1
-                        total += 1
-                        if len(results) >= limit:
-                            continue
-
-                        results.append({
+                        content = str(message.get("content", ""))
+                        role = message.get("role", "")
+                        tool_names = message.get("tool_names", [])
+                        entries.append({
                             "project_name": project["name"],
                             "project_display_name": project["display_name"],
                             "session_id": session["id"],
                             "session_modified": session["modified"],
                             "line_number": line_num,
-                            "page": ((session_match_count - 1) // 50) + 1,
-                            "role": message.get("role", ""),
+                            "role": role,
                             "timestamp": message.get("timestamp"),
-                            "snippet": self._make_search_snippet(message.get("content", ""), search),
+                            "content": content,
+                            "search_text": content.lower(),
+                            "message_date": self._message_date(message, session["modified"]),
+                            "has_code": bool(message.get("has_code")),
+                            "has_tools": bool(message.get("has_tool_activity")),
+                            "is_tool_only": bool(message.get("is_tool_only")),
+                            "has_file_edits": any(
+                                name in {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+                                for name in tool_names
+                            ),
+                            "has_errors": self._message_has_error(message),
                         })
 
-        return {"results": results, "total": total, "limit": limit}
+        return sorted(
+            entries,
+            key=lambda entry: entry.get("timestamp") or entry["session_modified"],
+            reverse=True,
+        )
+
+    def _entry_matches_filters(self, entry: Dict, filters: Dict[str, Any]) -> bool:
+        project = filters.get("project")
+        if project and entry["project_name"] != project:
+            return False
+
+        role = filters.get("role")
+        if role and role != "all" and entry["role"] != role:
+            return False
+
+        date_from = filters.get("date_from")
+        if date_from and entry["message_date"] and entry["message_date"] < date_from:
+            return False
+
+        date_to = filters.get("date_to")
+        if date_to and entry["message_date"] and entry["message_date"] > date_to:
+            return False
+
+        for key in ("has_code", "has_tools", "has_errors", "has_file_edits"):
+            if filters.get(key) and not entry.get(key):
+                return False
+
+        return True
+
+    def _message_date(self, message: Dict, fallback: str) -> str:
+        timestamp = message.get("timestamp") or fallback or ""
+        return str(timestamp)[:10]
+
+    def _message_has_error(self, message: Dict) -> bool:
+        if message.get("raw_type") == "error":
+            return True
+        content = str(message.get("content", "")).lower()
+        return "error" in content or "traceback" in content or "exception" in content
     
-    def _parse_message(self, data: Dict, line_num: int) -> Dict:
+    def _parse_message(self, data: Dict, line_num: int, include_tools: bool = False) -> Dict:
         """Parse different types of JSONL messages"""
         base_message = {
             "line_number": line_num,
@@ -214,7 +346,7 @@ class JSONLParser:
             
             if isinstance(content, list):
                 # Handle structured content (tool calls, etc.)
-                content = self._parse_structured_content(content)
+                content = self._parse_structured_content(content, include_tools)
             
             return {
                 **base_message,
@@ -232,7 +364,7 @@ class JSONLParser:
             content_metadata = self._structured_content_metadata(content)
             if isinstance(content, list):
                 # Handle structured content (tool calls, etc.)
-                content = self._parse_structured_content(content)
+                content = self._parse_structured_content(content, include_tools)
             
             return {
                 **base_message,
@@ -258,6 +390,7 @@ class JSONLParser:
         metadata = {
             "content_item_types": [],
             "tool_names": [],
+            "has_tool_activity": False,
             "is_tool_only": False,
         }
 
@@ -275,6 +408,7 @@ class JSONLParser:
 
                 if item_type in tool_types:
                     has_tool_activity = True
+                    metadata["has_tool_activity"] = True
                     if item_type == "tool_use" and item.get("name"):
                         metadata["tool_names"].append(item["name"])
                     continue
@@ -412,7 +546,8 @@ class JSONLParser:
         self, 
         message: Dict, 
         search: Optional[str], 
-        message_type: Optional[str]
+        message_type: Optional[str],
+        include_tools: bool = False
     ) -> bool:
         """Apply search and type filters"""
         
@@ -425,7 +560,7 @@ class JSONLParser:
         if message.get("model") == "<synthetic>" and content == "No response requested.":
             return False
 
-        if message.get("is_tool_only"):
+        if message.get("is_tool_only") and not include_tools:
             return False
 
         if not content.strip():

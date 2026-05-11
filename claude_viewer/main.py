@@ -48,6 +48,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 LIVE_JOBS: Dict[str, Dict[str, Any]] = {}
 LIVE_JOBS_LOCK = threading.Lock()
+PARSER_CACHE: Dict[str, JSONLParser] = {}
 
 # Initialize parser with custom path from environment
 def get_parser():
@@ -56,7 +57,39 @@ def get_parser():
     if not claude_path:
         # Fallback to default
         claude_path = str(Path.home() / ".claude" / "projects")
-    return JSONLParser(claude_path)
+    if claude_path not in PARSER_CACHE:
+        PARSER_CACHE[claude_path] = JSONLParser(claude_path)
+    return PARSER_CACHE[claude_path]
+
+def build_search_filters(
+    project_filter: Optional[str],
+    role: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+    has_code: Optional[str],
+    has_tools: Optional[str],
+    has_errors: Optional[str],
+    has_file_edits: Optional[str],
+) -> Dict[str, Any]:
+    """Normalize global search filters from query parameters."""
+    filters: Dict[str, Any] = {}
+    if project_filter:
+        filters["project"] = project_filter
+    if role and role in {"user", "assistant"}:
+        filters["role"] = role
+    if date_from:
+        filters["date_from"] = date_from
+    if date_to:
+        filters["date_to"] = date_to
+    for key, value in {
+        "has_code": has_code,
+        "has_tools": has_tools,
+        "has_errors": has_errors,
+        "has_file_edits": has_file_edits,
+    }.items():
+        if value:
+            filters[key] = True
+    return filters
 
 # Pydantic models
 class Project(BaseModel):
@@ -377,12 +410,33 @@ def _format_sse(event: str, data: Dict[str, Any], event_id: int) -> str:
 async def root(
     request: Request,
     q: Optional[str] = Query(None),
+    project_filter: Optional[str] = Query(None),
+    role: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    has_code: Optional[str] = Query(None),
+    has_tools: Optional[str] = Query(None),
+    has_errors: Optional[str] = Query(None),
+    has_file_edits: Optional[str] = Query(None),
 ):
     """Main page showing all projects"""
     parser = get_parser()
     projects = parser.get_projects_with_sessions()
     global_search = (q or "").strip()
-    global_search_results = parser.search_messages(global_search) if global_search else None
+    search_filters = build_search_filters(
+        project_filter,
+        role,
+        date_from,
+        date_to,
+        has_code,
+        has_tools,
+        has_errors,
+        has_file_edits,
+    )
+    global_search_results = (
+        parser.search_messages(global_search, filters=search_filters)
+        if global_search else None
+    )
     recent_sessions = [
         {
             **session,
@@ -404,6 +458,7 @@ async def root(
         "recent_sessions": recent_sessions,
         "global_search": global_search,
         "global_search_results": global_search_results,
+        "search_filters": search_filters,
     })
 
 @app.get("/api/projects", response_model=List[Project])
@@ -444,12 +499,14 @@ async def render_conversation_template(
     per_page: int,
     search: Optional[str],
     message_type: Optional[str],
+    target_line: Optional[int] = None,
+    show_tools: bool = False,
     embedded: bool = False
 ):
     """Render a conversation in either full-page or embedded mode."""
     parser = get_parser()
     conversation = parser.get_conversation(
-        project_name, session_id, page, per_page, search, message_type
+        project_name, session_id, page, per_page, search, message_type, target_line, show_tools
     )
 
     if not conversation["messages"] and (page is None or page == 1):
@@ -480,11 +537,13 @@ async def conversation_view(
     per_page: int = Query(50, le=200, ge=10),
     search: Optional[str] = Query(None),
     message_type: Optional[str] = Query(None),
+    line: Optional[int] = Query(None, ge=1),
+    show_tools: bool = Query(False),
     embedded: bool = Query(False)
 ):
     """Conversation viewer page"""
     return await render_conversation_template(
-        request, project_name, session_id, page, per_page, search, message_type, embedded
+        request, project_name, session_id, page, per_page, search, message_type, line, show_tools, embedded
     )
 
 @app.get("/embedded/conversation/{project_name}/{session_id}", response_class=HTMLResponse)
@@ -495,11 +554,13 @@ async def embedded_conversation_view(
     page: Optional[int] = Query(None, ge=1),
     per_page: int = Query(50, le=200, ge=10),
     search: Optional[str] = Query(None),
-    message_type: Optional[str] = Query(None)
+    message_type: Optional[str] = Query(None),
+    line: Optional[int] = Query(None, ge=1),
+    show_tools: bool = Query(False)
 ):
     """Conversation viewer for the homepage right pane."""
     return await render_conversation_template(
-        request, project_name, session_id, page, per_page, search, message_type, True
+        request, project_name, session_id, page, per_page, search, message_type, line, show_tools, True
     )
 
 @app.get("/api/conversation/{project_name}/{session_id}", response_model=ConversationResponse)
@@ -509,12 +570,14 @@ async def get_conversation(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, le=200, ge=10),
     search: Optional[str] = Query(None),
-    message_type: Optional[str] = Query(None)
+    message_type: Optional[str] = Query(None),
+    line: Optional[int] = Query(None, ge=1),
+    show_tools: bool = Query(False)
 ):
     """API endpoint to get conversation data"""
     parser = get_parser()
     conversation = parser.get_conversation(
-        project_name, session_id, page, per_page, search, message_type
+        project_name, session_id, page, per_page, search, message_type, line, show_tools
     )
     
     return ConversationResponse(**conversation)

@@ -192,6 +192,57 @@ main.container:has(.sessions-page) {
     color: var(--primary-color);
 }
 
+.global-search-filters {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+}
+
+.global-search-filters select,
+.global-search-filters input[type="date"] {
+    min-width: 0;
+    height: 1.7rem;
+    padding: 0.2rem 0.35rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.3rem;
+    background: white;
+    color: #334155;
+    font-size: 0.7rem;
+}
+
+.global-search-filters select {
+    max-width: 10rem;
+}
+
+.global-filter-check {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.25rem;
+    height: 1.7rem;
+    margin: 0 !important;
+    padding: 0 0.35rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.3rem;
+    color: #475569 !important;
+    font-size: 0.7rem !important;
+    font-weight: 500 !important;
+    white-space: nowrap;
+}
+
+.global-filter-check input {
+    margin: 0;
+}
+
+.dark-theme .global-search-filters select,
+.dark-theme .global-search-filters input[type="date"],
+.dark-theme .global-filter-check {
+    background: #0f172a;
+    border-color: var(--dark-border);
+    color: #e2e8f0 !important;
+}
+
 .global-search-results {
     margin-top: 0.5rem;
     max-height: min(38vh, 360px);
