@@ -146,7 +146,13 @@
                     <i class="bi bi-clock-history me-2"></i>
                     Sessions
                 </h2>
-                <p>{{ projects|length }} project{{ 's' if projects|length != 1 else '' }} / {{ total_sessions }} session{{ 's' if total_sessions != 1 else '' }}</p>
+                <p>
+                    {{ projects|length }} project{{ 's' if projects|length != 1 else '' }} /
+                    {{ total_sessions }} session{{ 's' if total_sessions != 1 else '' }}
+                    {% if live_session_count %}
+                        / {{ live_session_count }} live
+                    {% endif %}
+                </p>
             </div>
         </div>
 
@@ -183,6 +189,13 @@
                             >
                                 <span class="session-link-title">
                                     <i class="bi bi-chat-text"></i>
+                                    {% if session.live_terminal and session.live_terminal.live %}
+                                        <span
+                                            class="session-live-dot"
+                                            title="{{ session.live_terminal.transport }}{% if session.live_terminal.tty %} / {{ session.live_terminal.tty.replace('/dev/', '') }}{% endif %}{% if session.live_terminal.pid %} / pid {{ session.live_terminal.pid }}{% endif %}{% if session.live_terminal.title %} / {{ session.live_terminal.title }}{% endif %}{% if session.live_terminal.status %} / {{ session.live_terminal.status }}{% endif %}"
+                                            aria-label="Live in {{ session.live_terminal.transport }}"
+                                        ></span>
+                                    {% endif %}
                                     {{ session.session_name or ('Session ' ~ session.id[:8] ~ '...') }}
                                 </span>
                                 {% if session.session_recap %}

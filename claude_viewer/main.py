@@ -439,23 +439,21 @@ def _ps_for_pid(pid: int) -> Optional[Dict[str, str]]:
         "command": parts[4],
     }
 
-def _load_live_claude_registry(session_id: str) -> Optional[Dict[str, Any]]:
+def _load_live_claude_registries() -> Dict[str, Dict[str, Any]]:
     sessions_dir = Path.home() / ".claude" / "sessions"
     if not sessions_dir.exists():
-        return None
+        return {}
 
-    matches = []
+    live_sessions: Dict[str, Dict[str, Any]] = {}
     for session_file in sessions_dir.glob("*.json"):
         try:
             data = json.loads(session_file.read_text())
         except (OSError, json.JSONDecodeError):
             continue
 
-        if data.get("sessionId") != session_id:
-            continue
-
+        session_id = data.get("sessionId")
         pid = data.get("pid")
-        if not isinstance(pid, int):
+        if not session_id or not isinstance(pid, int):
             continue
 
         ps = _ps_for_pid(pid)
@@ -463,37 +461,41 @@ def _load_live_claude_registry(session_id: str) -> Optional[Dict[str, Any]]:
             continue
 
         data = {**data, "registry_file": str(session_file), "process": ps}
-        matches.append(data)
+        previous = live_sessions.get(session_id)
+        if not previous or (data.get("updatedAt") or 0) > (previous.get("updatedAt") or 0):
+            live_sessions[session_id] = data
 
-    if not matches:
-        return None
+    return live_sessions
 
-    return max(matches, key=lambda item: item.get("updatedAt") or 0)
+def _load_live_claude_registry(session_id: str) -> Optional[Dict[str, Any]]:
+    return _load_live_claude_registries().get(session_id)
 
-def _load_cmux_target(session_id: str) -> Optional[Dict[str, Any]]:
+def _load_cmux_targets() -> Dict[str, Dict[str, Any]]:
     state_file = Path.home() / "Library" / "Application Support" / "cmux" / "session-com.cmuxterm.app.json"
     if not state_file.exists():
-        return None
+        return {}
 
     try:
         state = json.loads(state_file.read_text())
     except (OSError, json.JSONDecodeError):
-        return None
+        return {}
 
+    targets: Dict[str, Dict[str, Any]] = {}
     for window_index, window in enumerate(state.get("windows", []), 1):
         workspaces = window.get("tabManager", {}).get("workspaces", [])
         for workspace_index, workspace in enumerate(workspaces, 1):
             for panel in workspace.get("panels", []):
                 terminal = panel.get("terminal") or {}
                 agent = terminal.get("agent") or {}
-                if agent.get("sessionId") != session_id:
+                session_id = agent.get("sessionId")
+                if not session_id:
                     continue
 
                 panel_id = panel.get("id")
                 if not panel_id:
                     continue
 
-                return {
+                targets[session_id] = {
                     "transport": "cmux",
                     "panel_id": panel_id,
                     "title": panel.get("title") or workspace.get("processTitle") or "",
@@ -502,7 +504,10 @@ def _load_cmux_target(session_id: str) -> Optional[Dict[str, Any]]:
                     "window_index": window_index,
                 }
 
-    return None
+    return targets
+
+def _load_cmux_target(session_id: str) -> Optional[Dict[str, Any]]:
+    return _load_cmux_targets().get(session_id)
 
 def _list_iterm_ttys() -> Dict[str, Dict[str, str]]:
     script = """
@@ -745,6 +750,93 @@ def _public_terminal_target(target: Optional[Dict[str, Any]]) -> Optional[Dict[s
         public["panel_id"] = target["panel_id"]
     return public
 
+def _build_live_terminal_index() -> Dict[str, Dict[str, Any]]:
+    """Return a session-id keyed snapshot of all live Claude terminal targets."""
+    registries = _load_live_claude_registries()
+    targets: Dict[str, Dict[str, Any]] = {}
+
+    for session_id, cmux_target in _load_cmux_targets().items():
+        targets[session_id] = {
+            **cmux_target,
+            "session_id": session_id,
+            "registry": registries.get(session_id),
+            "live": True,
+        }
+
+    iterm_sessions: Optional[Dict[str, Dict[str, str]]] = None
+    terminal_sessions: Optional[Dict[str, Dict[str, str]]] = None
+
+    for session_id, registry in registries.items():
+        if session_id in targets:
+            continue
+
+        tty = registry.get("process", {}).get("tty")
+        if not tty or tty == "??":
+            targets[session_id] = {
+                "transport": "process",
+                "session_id": session_id,
+                "registry": registry,
+                "live": True,
+                "reason": "Claude process is live, but no terminal TTY is attached.",
+            }
+            continue
+
+        tty_path = tty if tty.startswith("/dev/") else f"/dev/{tty}"
+
+        if iterm_sessions is None:
+            iterm_sessions = _list_iterm_ttys()
+        if tty_path in iterm_sessions:
+            targets[session_id] = {
+                "transport": "iterm2",
+                "session_id": session_id,
+                "tty": tty_path,
+                "title": iterm_sessions[tty_path].get("title", ""),
+                "registry": registry,
+                "live": True,
+            }
+            continue
+
+        if terminal_sessions is None:
+            terminal_sessions = _list_terminal_ttys()
+        if tty_path in terminal_sessions:
+            targets[session_id] = {
+                "transport": "terminal",
+                "session_id": session_id,
+                "tty": tty_path,
+                "title": terminal_sessions[tty_path].get("title", ""),
+                "registry": registry,
+                "live": True,
+            }
+            continue
+
+        targets[session_id] = {
+            "transport": "tty",
+            "session_id": session_id,
+            "tty": tty_path,
+            "registry": registry,
+            "live": True,
+            "reason": "Claude process is live, but the owning terminal app is not supported yet.",
+        }
+
+    return {
+        session_id: public_target
+        for session_id, target in targets.items()
+        if (public_target := _public_terminal_target(target))
+    }
+
+def _annotate_projects_with_live_targets(
+    projects: List[Dict[str, Any]],
+    live_index: Dict[str, Dict[str, Any]],
+) -> None:
+    for project in projects:
+        live_count = 0
+        for session in project.get("sessions", []):
+            live_terminal = live_index.get(session.get("id"))
+            session["live_terminal"] = live_terminal
+            if live_terminal and live_terminal.get("live"):
+                live_count += 1
+        project["live_session_count"] = live_count
+
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def root(
@@ -762,6 +854,8 @@ async def root(
     """Main page showing all projects"""
     parser = get_parser()
     projects = parser.get_projects_with_sessions()
+    live_index = _build_live_terminal_index()
+    _annotate_projects_with_live_targets(projects, live_index)
     global_search = (q or "").strip()
     search_filters = build_search_filters(
         project_filter,
@@ -796,6 +890,7 @@ async def root(
         "request": request,
         "projects": projects,
         "recent_sessions": recent_sessions,
+        "live_session_count": len(live_index),
         "global_search": global_search,
         "global_search_results": global_search_results,
         "search_filters": search_filters,
