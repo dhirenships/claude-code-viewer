@@ -53,6 +53,11 @@
             <input type="hidden" name="embedded" value="true">
         {% endif %}
         <div class="filter-section">
+            {% if not embedded %}
+            <a href="/" class="conv-home-btn" title="Back to sessions" aria-label="Back to sessions">
+                <i class="bi bi-layout-sidebar-reverse"></i>
+            </a>
+            {% endif %}
             <div class="filter-group">
                 <label for="search">Search Messages</label>
                 <input 
@@ -75,13 +80,13 @@
             </div>
             
             <div class="filter-actions">
-                <button type="submit" class="search-btn">
+                <button type="submit" class="search-btn" title="Search">
                     <i class="bi bi-search me-1"></i>
-                    Search
+                    <span class="btn-label">Search</span>
                 </button>
-                <button type="button" id="clear-filters" class="clear-btn">
+                <button type="button" id="clear-filters" class="clear-btn" title="Clear">
                     <i class="bi bi-x-circle me-1"></i>
-                    Clear
+                    <span class="btn-label">Clear</span>
                 </button>
             </div>
         </div>

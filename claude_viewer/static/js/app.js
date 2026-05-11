@@ -36,7 +36,15 @@ class ClaudeViewer {
 
         const frame = document.querySelector('iframe[name="conversation-frame"]');
         if (frame) {
-            frame.addEventListener('load', () => this.syncFrameTheme());
+            frame.addEventListener('load', () => {
+                this.syncFrameTheme();
+                // After the iframe's own JS auto-scrolls its content, iOS Safari can leave
+                // the iframe GPU layer blank. Toggling opacity forces a GPU re-composite.
+                setTimeout(() => {
+                    frame.style.opacity = '0.9999';
+                    requestAnimationFrame(() => { frame.style.opacity = ''; });
+                }, 350);
+            });
         }
 
         // Search form
@@ -289,10 +297,21 @@ class ClaudeViewer {
         const params = new URLSearchParams(window.location.search);
         if (params.get('search') || params.get('highlight')) return;
 
+        // Double-rAF + scrollIntoView: most reliable on iOS Safari inside iframes.
+        // scrollIntoView triggers a native scroll which the browser paints correctly,
+        // unlike direct scrollTop assignment which can leave content blank.
         requestAnimationFrame(() => {
-            window.scrollTo({
-                top: document.documentElement.scrollHeight,
-                behavior: 'auto'
+            requestAnimationFrame(() => {
+                const lastMsg = document.querySelector('.messages-container .terminal-turn:last-child');
+                if (lastMsg) {
+                    lastMsg.scrollIntoView({ block: 'end', behavior: 'auto' });
+                } else {
+                    const scrollEl = document.scrollingElement || document.documentElement;
+                    scrollEl.scrollTop = scrollEl.scrollHeight;
+                }
+                // Reading offsetHeight forces a synchronous layout commit, ensuring
+                // iOS Safari rasterizes the newly visible content before yielding.
+                void document.body.offsetHeight;
             });
         });
     }
@@ -576,16 +595,15 @@ class ClaudeViewer {
         }
 
         requestAnimationFrame(() => {
-            const newHeight = document.documentElement.scrollHeight;
-            if (wasNearBottom) {
-                window.scrollTo({ top: newHeight, behavior: 'auto' });
-                return;
-            }
-
-            const heightDelta = newHeight - previousHeight;
-            window.scrollTo({
-                top: Math.max(previousScrollY + heightDelta, 0),
-                behavior: 'auto',
+            requestAnimationFrame(() => {
+                const scrollEl = document.scrollingElement || document.documentElement;
+                const newHeight = scrollEl.scrollHeight;
+                if (wasNearBottom) {
+                    scrollEl.scrollTop = newHeight;
+                    return;
+                }
+                const heightDelta = newHeight - previousHeight;
+                scrollEl.scrollTop = Math.max(previousScrollY + heightDelta, 0);
             });
         });
     }

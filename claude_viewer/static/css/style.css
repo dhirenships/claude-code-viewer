@@ -1205,6 +1205,11 @@ code {
     color: #cbd5e1;
 }
 
+/* Back-to-sessions button: shown only on mobile via media query */
+.conv-home-btn {
+    display: none;
+}
+
 .conversation-view {
     padding-bottom: 3.2rem;
 }
@@ -1537,6 +1542,11 @@ code {
 
     .conversation-frame {
         height: 100%;
+        /* Force the iframe onto its own GPU compositing layer so iOS Safari
+           doesn't blank the layer after the iframe's internal auto-scroll. */
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        will-change: transform;
     }
 
     /* Search filters: horizontal scroll on mobile */
@@ -1555,6 +1565,26 @@ code {
     .global-search-filters input[type="date"],
     .global-filter-check {
         flex: 0 0 auto;
+    }
+
+    .global-search-filters select {
+        max-width: 6.5rem;
+        font-size: 0.65rem;
+        padding: 0.15rem 0.25rem;
+        height: 1.55rem;
+    }
+
+    .global-search-filters input[type="date"] {
+        max-width: 6rem;
+        font-size: 0.65rem;
+        padding: 0.15rem 0.25rem;
+        height: 1.55rem;
+    }
+
+    .global-filter-check {
+        font-size: 0.65rem !important;
+        height: 1.55rem;
+        padding: 0 0.3rem;
     }
 
     /* Bigger touch targets */
@@ -1593,12 +1623,101 @@ code {
         gap: 0.25rem;
     }
 
+    /* Conversation filter bar: compact single row on mobile */
     .filter-section {
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        gap: 0.4rem;
+        align-items: center;
     }
 
-    .filter-group {
-        min-width: 100%;
+    /* Search input group stretches; hide labels and per-page select */
+    .filter-section .filter-group {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .filter-section .filter-group label {
+        display: none;
+    }
+
+    .filter-section .filter-group:has(select) {
+        display: none;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 0.3rem;
+        flex: 0 0 auto;
+    }
+
+    .search-filters .search-btn,
+    .search-filters .clear-btn {
+        padding: 0.45rem 0.6rem;
+        font-size: 0.75rem;
+        min-height: 0;
+    }
+
+    /* Icon-only buttons: hide text label, remove icon right margin */
+    .filter-actions .btn-label {
+        display: none;
+    }
+
+    .filter-actions .search-btn i,
+    .filter-actions .clear-btn i {
+        margin: 0;
+    }
+
+    /* Mobile home/sessions button in conversation filter bar */
+    .conv-home-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 2.25rem;
+        height: 2.25rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.35rem;
+        background: var(--surface-bg);
+        color: var(--text-color);
+        text-decoration: none;
+        font-size: 1rem;
+    }
+
+    .conv-home-btn:hover {
+        background: var(--surface-muted);
+        color: var(--primary-color);
+    }
+
+    /* QR code is a desktop/LAN-sharing feature — not useful on the phone itself */
+    .session-share-qr {
+        display: none;
+    }
+
+    /* Footer is too large on mobile; navigation is via breadcrumb / home button */
+    footer {
+        display: none;
+    }
+
+    /* Extra padding so last message clears the fixed send bar */
+    .conversation-view {
+        padding-bottom: 5rem;
+    }
+
+    /* Force GPU layer on messages container — prevents iOS Safari blank-after-scroll */
+    .messages-container.terminal-transcript {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+    }
+
+    /* Compact summary + hide recap on mobile */
+    .conversation-summary {
+        font-size: 0.68rem;
+        margin-top: 0.2rem;
+    }
+
+    .conversation-recap {
+        display: none;
     }
 
     .pagination-container {
@@ -1638,6 +1757,35 @@ code {
     /* Hide verbose label in search shell on mobile (placeholder suffices) */
     .global-search-form > label {
         display: none;
+    }
+
+    /* Allow the search form to shrink below its content min-width so the grid
+       doesn't overflow and push the theme toggle off-screen. */
+    .global-search-form {
+        min-width: 0;
+    }
+
+    /* Theme toggle: icon-only on mobile */
+    .theme-toggle [data-theme-label] {
+        display: none;
+    }
+
+    .theme-toggle {
+        padding: 0;
+        width: 2.4rem;
+        justify-content: center;
+    }
+
+    /* Breadcrumb: compact single line */
+    .breadcrumb {
+        font-size: 0.7rem;
+        flex-wrap: nowrap;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        padding: 0 0.2rem;
     }
 }
 
