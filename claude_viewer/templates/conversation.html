@@ -31,7 +31,22 @@
     data-project="{{ project_name }}"
     data-session="{{ session_id }}"
     data-file-revision="{{ conversation.file_revision or '' }}"
+    data-target-line="{{ target_line or '' }}"
 >
+{% if share_url %}
+<a
+    class="session-share-qr"
+    href="{{ share_url }}"
+    target="_blank"
+    rel="noopener"
+    title="Open on LAN: {{ share_url }}"
+    data-session-share
+    data-session="{{ session_id }}"
+>
+    <img src="/api/qr.svg?data={{ share_url | urlencode }}" alt="QR for {{ share_url }}">
+    <span>{{ share_url.replace('http://', '') }}</span>
+</a>
+{% endif %}
 <div class="search-filters">
     <form id="search-form" method="get">
         {% if embedded %}

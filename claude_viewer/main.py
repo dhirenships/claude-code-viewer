@@ -1,27 +1,31 @@
 """FastAPI main application for Claude Code Viewer."""
 
 import asyncio
+import html
+import io
 import json
 import os
 import subprocess
 import threading
 import time
 import uuid
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from .utils.jsonl_parser import JSONLParser
 import markdown
+from html.parser import HTMLParser
 from pygments import highlight
 from pygments.lexers import get_lexer_by_name, guess_lexer
 from pygments.formatters import HtmlFormatter
 from pygments.util import ClassNotFound
 import re
+from .statusline_setup import get_lan_ip
 
 # Get the package directory
 PACKAGE_DIR = Path(__file__).parent
@@ -210,6 +214,54 @@ def process_markdown_text(text: str) -> str:
     
     return html
 
+class SearchHighlightHTMLParser(HTMLParser):
+    """Highlight search text in rendered HTML without touching tags."""
+
+    def __init__(self, search: str):
+        super().__init__(convert_charrefs=False)
+        self.search_pattern = re.compile(re.escape(search), re.IGNORECASE)
+        self.parts: List[str] = []
+
+    def handle_starttag(self, tag: str, attrs: List[tuple]) -> None:
+        self.parts.append(self.get_starttag_text() or "")
+
+    def handle_startendtag(self, tag: str, attrs: List[tuple]) -> None:
+        self.parts.append(self.get_starttag_text() or "")
+
+    def handle_endtag(self, tag: str) -> None:
+        self.parts.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(self.search_pattern.sub(
+            lambda match: f"<mark>{html.escape(match.group(0))}</mark>",
+            data,
+        ))
+
+    def handle_entityref(self, name: str) -> None:
+        self.parts.append(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        self.parts.append(f"&#{name};")
+
+    def handle_comment(self, data: str) -> None:
+        self.parts.append(f"<!--{data}-->")
+
+    def handle_decl(self, decl: str) -> None:
+        self.parts.append(f"<!{decl}>")
+
+    def get_html(self) -> str:
+        return "".join(self.parts)
+
+def highlight_rendered_search(html_text: str, search: Optional[str]) -> str:
+    search = (search or "").strip()
+    if not search:
+        return html_text
+
+    parser = SearchHighlightHTMLParser(search)
+    parser.feed(html_text)
+    parser.close()
+    return parser.get_html()
+
 def get_current_project_name() -> str:
     """Return Claude's project directory name for this viewer process cwd."""
     cwd = os.getcwd().rstrip(os.sep)
@@ -217,6 +269,26 @@ def get_current_project_name() -> str:
 
 def _live_conversation_url(project_name: str, session_id: str) -> str:
     return f"/conversation/{project_name}/{session_id}?embedded=true"
+
+def _request_port(request: Request) -> Optional[int]:
+    if request.url.port:
+        return request.url.port
+
+    host = request.headers.get("host", "")
+    if ":" in host:
+        _, _, port_text = host.rpartition(":")
+        try:
+            return int(port_text)
+        except ValueError:
+            return None
+
+    return 443 if request.url.scheme == "https" else 80
+
+def _session_share_url(request: Request, session_id: str) -> str:
+    host = get_lan_ip() or request.url.hostname or "localhost"
+    port = _request_port(request)
+    netloc = f"{host}:{port}" if port not in {80, 443, None} else host
+    return f"{request.url.scheme}://{netloc}/v/{session_id[:8]}"
 
 def _append_live_event(job: Dict[str, Any], event_type: str, data: Dict[str, Any]) -> None:
     data.setdefault("job_id", job["id"])
@@ -932,6 +1004,38 @@ async def session_shortcut(session_ref: str):
         status_code=302,
     )
 
+@app.get("/api/qr.svg")
+async def qr_svg(data: str = Query(..., min_length=1, max_length=1024)):
+    """Return a local SVG QR code for a short URL."""
+    try:
+        import qrcode
+        from qrcode.image.svg import SvgPathImage
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail="QR support is not installed") from exc
+
+    qr_image = qrcode.make(
+        data,
+        image_factory=SvgPathImage,
+        box_size=6,
+        border=2,
+    )
+    output = io.BytesIO()
+    qr_image.save(output)
+    return Response(
+        content=output.getvalue(),
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-store"},
+    )
+
+@app.get("/api/share-url/{session_id}")
+async def get_share_url(request: Request, session_id: str):
+    """Return the current LAN share URL for a session."""
+    share_url = _session_share_url(request, session_id)
+    return {
+        "url": share_url,
+        "qr_src": f"/api/qr.svg?data={quote(share_url, safe='')}",
+    }
+
 @app.get("/api/projects", response_model=List[Project])
 async def get_projects():
     """API endpoint to get all projects"""
@@ -986,7 +1090,8 @@ async def render_conversation_template(
     # Render markdown content
     for message in conversation["messages"]:
         if message.get("content"):
-            message["rendered_content"] = render_markdown_with_code(message["content"])
+            rendered_content = render_markdown_with_code(message["content"])
+            message["rendered_content"] = highlight_rendered_search(rendered_content, search)
 
     return templates.TemplateResponse("conversation.html", {
         "request": request,
@@ -994,8 +1099,10 @@ async def render_conversation_template(
         "session_id": session_id,
         "conversation": conversation,
         "live_terminal": _public_terminal_target(_resolve_live_terminal(session_id)),
+        "share_url": _session_share_url(request, session_id),
         "search": search,
         "message_type": message_type,
+        "target_line": target_line,
         "display_name": parser._format_project_name(project_name),
         "embedded": embedded,
     })

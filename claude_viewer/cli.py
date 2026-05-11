@@ -8,6 +8,7 @@ from pathlib import Path
 import uvicorn
 
 from . import __version__
+from .statusline_setup import install_claude_statusline, localhost_base_url_for_port, viewer_base_url_for_host
 
 
 def get_default_projects_path():
@@ -63,6 +64,7 @@ Examples:
   claude-viewer --port 8080                       # Custom port
   claude-viewer --projects-path /custom/path      # Custom Claude projects path
   claude-viewer --host 0.0.0.0 --port 3000      # Accessible from other machines
+  claude-viewer --no-statusline                   # Do not update Claude's statusline
         """
     )
     
@@ -92,6 +94,19 @@ Examples:
         action="version",
         version=f"claude-viewer {__version__}"
     )
+
+    parser.add_argument(
+        "--no-statusline",
+        action="store_true",
+        help="Do not install/update Claude's statusline link to the viewer"
+    )
+
+    parser.add_argument(
+        "--statusline-base-url",
+        type=str,
+        default=None,
+        help="Base URL to show in Claude's statusline (default: derived from --host/--port)"
+    )
     
     args = parser.parse_args()
     
@@ -101,10 +116,25 @@ Examples:
     
     # Set environment variable for the app to use
     os.environ["CLAUDE_PROJECTS_PATH"] = str(Path(args.projects_path).expanduser().resolve())
+    viewer_base_url = viewer_base_url_for_host(args.host, args.port)
+    statusline_base_url = args.statusline_base_url or localhost_base_url_for_port(args.port)
     
     print(f"⚡ Claude Code Viewer v{__version__}")
     print(f"📁 Using projects: {os.environ['CLAUDE_PROJECTS_PATH']}")
     print(f"🌐 Starting server at http://{args.host}:{args.port}")
+    if viewer_base_url != f"http://{args.host}:{args.port}":
+        print(f"🌐 Open from LAN: {viewer_base_url}")
+    if not args.no_statusline:
+        try:
+            result = install_claude_statusline(statusline_base_url)
+            print(f"🔗 {result.message}")
+            if result.backup_path:
+                print(f"   Backed up previous Claude settings to {result.backup_path}")
+        except RuntimeError as exc:
+            print(f"⚠️  Could not install Claude statusline link: {exc}")
+            print("   Start with --no-statusline to skip this setup.")
+    else:
+        print("🔗 Claude statusline setup skipped")
     print(f"♻️  Auto-reload enabled for code, templates, and static files")
     print(f"🔍 Press Ctrl+C to stop")
     print()

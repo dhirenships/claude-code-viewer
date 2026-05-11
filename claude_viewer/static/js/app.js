@@ -9,6 +9,7 @@ class ClaudeViewer {
         this.activityRevision = null;
         this.activeSessionRevision = null;
         this.activityTimer = null;
+        this.shareTimer = null;
         this.didInitialConversationScroll = false;
         this.init();
     }
@@ -20,6 +21,7 @@ class ClaudeViewer {
         this.setupSearch();
         this.setupSidebar();
         this.setupConversationScroll();
+        this.setupSessionShare();
         this.setupLiveClaude();
         this.setupActivityPolling();
     }
@@ -134,12 +136,33 @@ class ClaudeViewer {
         if (!project || !session) return;
 
         const url = new URL(window.location);
+        const currentParams = new URLSearchParams(window.location.search);
+        const linkUrl = new URL(link.href, window.location.origin);
         url.pathname = '/';
+        url.search = '';
         url.searchParams.set('project', project);
         url.searchParams.set('session', session);
+
         if (link.dataset.globalResult) {
-            url.searchParams.set('q', new URL(link.href).searchParams.get('search') || '');
+            const search = linkUrl.searchParams.get('search') || '';
+            if (search) url.searchParams.set('q', search);
+
+            const line = link.dataset.line || linkUrl.searchParams.get('line') || '';
+            if (line) url.searchParams.set('line', line);
+
+            const messageType = linkUrl.searchParams.get('message_type');
+            if (messageType) url.searchParams.set('role', messageType);
+
+            ['project_filter', 'date_from', 'date_to', 'has_code', 'has_errors', 'has_tools', 'has_file_edits'].forEach(key => {
+                const value = currentParams.get(key);
+                if (value) url.searchParams.set(key, value);
+            });
+
+            if (linkUrl.searchParams.get('show_tools') === 'true' && !url.searchParams.has('has_tools')) {
+                url.searchParams.set('has_tools', '1');
+            }
         }
+
         window.history.pushState({ project, session }, '', url);
     }
 
@@ -250,9 +273,20 @@ class ClaudeViewer {
 
     setupConversationScroll() {
         const messagesContainer = document.querySelector('.messages-container');
-        if (!messagesContainer || window.location.hash || this.didInitialConversationScroll) return;
+        if (!messagesContainer || this.didInitialConversationScroll) return;
 
         this.didInitialConversationScroll = true;
+
+        const target = this.getConversationScrollTarget();
+        if (target) {
+            requestAnimationFrame(() => {
+                target.scrollIntoView({ block: 'center', behavior: 'auto' });
+            });
+            return;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('search')) return;
 
         requestAnimationFrame(() => {
             window.scrollTo({
@@ -260,6 +294,23 @@ class ClaudeViewer {
                 behavior: 'auto'
             });
         });
+    }
+
+    getConversationScrollTarget() {
+        if (window.location.hash) {
+            const hashId = window.location.hash.slice(1);
+            const targetId = hashId ? decodeURIComponent(hashId) : '';
+            const target = targetId ? document.getElementById(targetId) : null;
+            if (target) return target;
+        }
+
+        const conversationView = document.querySelector('.conversation-view');
+        const targetLine = conversationView?.dataset.targetLine;
+        if (targetLine) {
+            return document.getElementById(`message-line-${targetLine}`);
+        }
+
+        return document.querySelector('.terminal-turn.search-target');
     }
 
     setupLiveClaude() {
@@ -416,12 +467,52 @@ class ClaudeViewer {
         conversationView.replaceWith(nextConversationView);
         this.setupCodeCopyButtons();
         this.setupPagination();
+        this.setupSessionShare();
         this.restoreConversationScroll({
             preserveScroll: options.preserveScroll !== false,
             wasNearBottom,
             previousScrollY,
             previousHeight,
         });
+    }
+
+    setupSessionShare() {
+        if (this.shareTimer) {
+            clearInterval(this.shareTimer);
+            this.shareTimer = null;
+        }
+
+        const share = document.querySelector('[data-session-share]');
+        if (!share?.dataset.session) return;
+
+        this.refreshSessionShare(share);
+        this.shareTimer = setInterval(() => this.refreshSessionShare(share), 30000);
+    }
+
+    async refreshSessionShare(share) {
+        try {
+            const response = await fetch(`/api/share-url/${encodeURIComponent(share.dataset.session)}`, {
+                cache: 'no-store',
+            });
+            if (!response.ok) return;
+
+            const data = await response.json();
+            if (!data.url || share.href === data.url) return;
+
+            share.href = data.url;
+            share.title = `Open on LAN: ${data.url}`;
+            const image = share.querySelector('img');
+            if (image && data.qr_src) {
+                image.src = data.qr_src;
+                image.alt = `QR for ${data.url}`;
+            }
+            const label = share.querySelector('span');
+            if (label) {
+                label.textContent = data.url.replace(/^https?:\/\//, '');
+            }
+        } catch (error) {
+            // The QR is a convenience; keep the page quiet if the refresh misses.
+        }
     }
 
     isNearPageBottom(threshold = 120) {

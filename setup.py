@@ -44,6 +44,7 @@ setup(
         "aiofiles>=23.2.1",
         "markdown>=3.5.1,<4.0.0",
         "pygments>=2.16.1,<3.0.0",
+        "qrcode>=7.4,<9.0",
     ],
     python_requires=">=3.8",
     classifiers=[
