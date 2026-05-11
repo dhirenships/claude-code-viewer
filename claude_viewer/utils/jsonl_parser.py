@@ -391,14 +391,18 @@ class JSONLParser:
             "content_item_types": [],
             "tool_names": [],
             "has_tool_activity": False,
+            "has_internal_activity": False,
             "is_tool_only": False,
+            "is_internal_only": False,
         }
 
         if not isinstance(content, list):
             return metadata
 
         tool_types = {"tool_use", "tool_result"}
+        internal_types = {"thinking", "redacted_thinking"}
         has_tool_activity = False
+        has_internal_activity = False
         has_visible_content = False
 
         for item in content:
@@ -413,6 +417,11 @@ class JSONLParser:
                         metadata["tool_names"].append(item["name"])
                     continue
 
+                if item_type in internal_types:
+                    has_internal_activity = True
+                    metadata["has_internal_activity"] = True
+                    continue
+
                 if item_type == "text":
                     has_visible_content = bool(str(item.get("text", "")).strip()) or has_visible_content
                 else:
@@ -425,6 +434,7 @@ class JSONLParser:
                 has_visible_content = True
 
         metadata["is_tool_only"] = has_tool_activity and not has_visible_content
+        metadata["is_internal_only"] = has_internal_activity and not has_visible_content
         return metadata
 
     def _parse_structured_content(self, content_list: List, include_tools: bool = False) -> str:
@@ -512,6 +522,8 @@ class JSONLParser:
                                 parsed_parts.append(f"📋 **Tool Output:**\n```\n{result_content}\n```")
                         else:
                             parsed_parts.append(f"📋 **Tool Output:**\n```json\n{json.dumps(result_content, indent=2)}\n```")
+                elif item.get("type") in {"thinking", "redacted_thinking"}:
+                    continue
                 else:
                     # Unknown content type
                     parsed_parts.append(f"ℹ️ **{item.get('type', 'Unknown')}:**\n```json\n{json.dumps(item, indent=2)}\n```")
@@ -561,6 +573,9 @@ class JSONLParser:
             return False
 
         if message.get("is_tool_only") and not include_tools:
+            return False
+
+        if message.get("is_internal_only"):
             return False
 
         if not content.strip():
