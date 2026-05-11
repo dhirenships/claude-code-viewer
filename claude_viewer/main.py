@@ -7,9 +7,10 @@ import subprocess
 import threading
 import time
 import uuid
+from urllib.parse import urlencode
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -895,6 +896,41 @@ async def root(
         "global_search_results": global_search_results,
         "search_filters": search_filters,
     })
+
+@app.get("/v/{session_ref}")
+@app.get("/s/{session_ref}")
+async def session_shortcut(session_ref: str):
+    """Redirect a short or full Claude session id to the viewer homepage."""
+    parser = get_parser()
+    projects_path = Path(parser.claude_projects_path)
+    matches = []
+
+    if projects_path.exists():
+        for project_entry in projects_path.iterdir():
+            if not project_entry.is_dir():
+                continue
+
+            for session_file in project_entry.glob("*.jsonl"):
+                session_id = session_file.stem
+                if session_id == session_ref or session_id.startswith(session_ref):
+                    matches.append((project_entry.name, session_id))
+
+    if not matches:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    exact_matches = [match for match in matches if match[1] == session_ref]
+    if exact_matches:
+        matches = exact_matches
+
+    unique_matches = sorted(set(matches))
+    if len(unique_matches) > 1:
+        raise HTTPException(status_code=409, detail="Session prefix is ambiguous")
+
+    project_name, session_id = unique_matches[0]
+    return RedirectResponse(
+        url=f"/?{urlencode({'project': project_name, 'session': session_id})}",
+        status_code=302,
+    )
 
 @app.get("/api/projects", response_model=List[Project])
 async def get_projects():
