@@ -210,6 +210,7 @@ class JSONLParser:
             # Direct user/assistant messages (new format)
             message_data = data.get("message", {})
             content = message_data.get("content", "")
+            content_metadata = self._structured_content_metadata(content)
             
             if isinstance(content, list):
                 # Handle structured content (tool calls, etc.)
@@ -222,11 +223,13 @@ class JSONLParser:
                 "content": content,
                 "display_type": data.get("type", "").title(),
                 "model": message_data.get("model"),
-                "has_code": self._contains_code(content)
+                "has_code": self._contains_code(content),
+                **content_metadata
             }
         elif "role" in data:
             # Legacy format - User/Assistant messages
             content = data.get("content", "")
+            content_metadata = self._structured_content_metadata(content)
             if isinstance(content, list):
                 # Handle structured content (tool calls, etc.)
                 content = self._parse_structured_content(content)
@@ -238,7 +241,8 @@ class JSONLParser:
                 "content": content,
                 "display_type": data.get("role", "").title(),
                 "model": data.get("model"),
-                "has_code": self._contains_code(content)
+                "has_code": self._contains_code(content),
+                **content_metadata
             }
         else:
             # Other types (system messages, etc.)
@@ -249,7 +253,47 @@ class JSONLParser:
                 "display_type": data.get("type", "Unknown").title()
             }
     
-    def _parse_structured_content(self, content_list: List) -> str:
+    def _structured_content_metadata(self, content: object) -> Dict:
+        """Classify structured content without relying on rendered text."""
+        metadata = {
+            "content_item_types": [],
+            "tool_names": [],
+            "is_tool_only": False,
+        }
+
+        if not isinstance(content, list):
+            return metadata
+
+        tool_types = {"tool_use", "tool_result"}
+        has_tool_activity = False
+        has_visible_content = False
+
+        for item in content:
+            if isinstance(item, dict):
+                item_type = item.get("type", "unknown")
+                metadata["content_item_types"].append(item_type)
+
+                if item_type in tool_types:
+                    has_tool_activity = True
+                    if item_type == "tool_use" and item.get("name"):
+                        metadata["tool_names"].append(item["name"])
+                    continue
+
+                if item_type == "text":
+                    has_visible_content = bool(str(item.get("text", "")).strip()) or has_visible_content
+                else:
+                    has_visible_content = True
+            elif isinstance(item, str):
+                metadata["content_item_types"].append("text")
+                has_visible_content = bool(item.strip()) or has_visible_content
+            else:
+                metadata["content_item_types"].append(type(item).__name__)
+                has_visible_content = True
+
+        metadata["is_tool_only"] = has_tool_activity and not has_visible_content
+        return metadata
+
+    def _parse_structured_content(self, content_list: List, include_tools: bool = False) -> str:
         """Parse structured content from tool calls"""
         parsed_parts = []
         for item in content_list:
@@ -262,6 +306,9 @@ class JSONLParser:
                     # Image content
                     parsed_parts.append("📷 **[Image attached]**")
                 elif item.get("type") == "tool_use":
+                    if not include_tools:
+                        continue
+
                     # Tool use - format nicely
                     tool_name = item.get("name", "unknown_tool")
                     tool_params = item.get("input", {})
@@ -292,6 +339,9 @@ class JSONLParser:
                         parsed_parts.append(f"🔧 **Tool Used: {tool_name}**\n{params_text}")
                     
                 elif item.get("type") == "tool_result":
+                    if not include_tools:
+                        continue
+
                     # Tool result - handle different result types
                     result_content = item.get("content", "")
                     
@@ -373,6 +423,12 @@ class JSONLParser:
             return False
 
         if message.get("model") == "<synthetic>" and content == "No response requested.":
+            return False
+
+        if message.get("is_tool_only"):
+            return False
+
+        if not content.strip():
             return False
 
         # Type filter. By default the viewer focuses on the real conversation

@@ -565,44 +565,72 @@ main.container:has(.sessions-page) {
     overscroll-behavior: contain;
 }
 
-.live-message {
-    border-bottom: 1px solid #e2e8f0;
-    padding: 0.45rem 0.75rem 0.6rem;
+.terminal-transcript,
+.live-claude-messages {
+    background: #0b1020;
+    color: #d7dde8;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    padding: 0.65rem 0.8rem 1rem;
 }
 
-.dark-theme .live-message {
-    border-color: var(--dark-border);
+.messages-container.terminal-transcript {
+    min-height: calc(100vh - 8rem);
 }
 
-.live-message-header {
-    margin-bottom: 0.2rem;
+.terminal-turn {
+    margin: 0 0 0.95rem;
+}
+
+.terminal-turn:last-child {
+    margin-bottom: 0;
+}
+
+.terminal-prompt {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.18rem;
+    color: #7dd3fc;
     font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: lowercase;
+    white-space: nowrap;
 }
 
-.live-message.user .live-message-header {
-    color: var(--success-color);
+.terminal-turn.user .terminal-prompt {
+    color: #86efac;
 }
 
-.live-message.assistant .live-message-header {
-    color: var(--primary-color);
+.terminal-turn.system .terminal-prompt {
+    color: #fbbf24;
 }
 
-.live-message.system .live-message-header {
-    color: var(--warning-color);
+.terminal-marker::before {
+    content: "$ ";
+    color: #64748b;
 }
 
-.live-message-content {
+.terminal-line-meta {
+    color: #64748b;
+    font-size: 0.68rem;
+}
+
+.terminal-content {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
     white-space: pre-wrap;
     word-break: break-word;
-    color: #334155;
-    font-size: 0.82rem;
-    line-height: 1.45;
 }
 
-.dark-theme .live-message-content {
-    color: #e2e8f0;
+.terminal-content code,
+.terminal-content pre {
+    color: inherit;
+    background: transparent;
+    font: inherit;
 }
 
 .conversation-empty-state {

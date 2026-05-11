@@ -371,7 +371,7 @@ class ClaudeViewer {
         messages.innerHTML = '';
         this.liveAssistantContent = null;
         this.liveAssistantText = '';
-        this.appendLiveMessage('user', 'User', prompt);
+        this.appendLiveMessage('user', 'user', prompt);
         this.ensureLiveAssistantMessage();
         this.scrollLivePanel();
     }
@@ -380,15 +380,19 @@ class ClaudeViewer {
         const messages = document.getElementById('live-claude-messages');
         if (!messages) return null;
 
-        const message = document.createElement('div');
-        message.className = `live-message ${role}`;
+        const message = document.createElement('section');
+        message.className = `terminal-turn live-message ${role}`;
 
         const header = document.createElement('div');
-        header.className = 'live-message-header';
-        header.textContent = label;
+        header.className = 'terminal-prompt';
 
-        const content = document.createElement('div');
-        content.className = 'live-message-content';
+        const marker = document.createElement('span');
+        marker.className = 'terminal-marker';
+        marker.textContent = label;
+        header.appendChild(marker);
+
+        const content = document.createElement('pre');
+        content.className = 'terminal-content live-message-content';
         content.textContent = text;
 
         message.append(header, content);
@@ -400,7 +404,7 @@ class ClaudeViewer {
     ensureLiveAssistantMessage() {
         if (this.liveAssistantContent) return;
 
-        this.liveAssistantContent = this.appendLiveMessage('assistant', 'Claude', '');
+        this.liveAssistantContent = this.appendLiveMessage('assistant', 'claude', '');
     }
 
     appendLiveAssistantDelta(text) {
@@ -413,7 +417,7 @@ class ClaudeViewer {
     }
 
     appendLiveSystemMessage(text) {
-        this.appendLiveMessage('system', 'System', text);
+        this.appendLiveMessage('system', 'system', text);
     }
 
     setLiveStatus(status) {

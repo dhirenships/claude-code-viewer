@@ -90,45 +90,21 @@
 
 <!-- Messages -->
 {% if conversation.messages %}
-    <div class="messages-container">
+    <div class="messages-container terminal-transcript">
         {% for message in conversation.messages %}
-            <div class="message" id="message-line-{{ message.line_number }}">
-                <div class="message-header">
-                    <div class="message-role {{ message.role or message.type }}">
-                        {% if message.role == 'user' or message.display_type == 'User' %}
-                            <i class="bi bi-person-circle"></i>
-                            <span>User</span>
-                        {% elif message.role == 'assistant' or message.display_type == 'Assistant' %}
-                            <i class="bi bi-cpu"></i>
-                            <span>Claude</span>
-                        {% endif %}
-                        
-                        {% if message.has_code %}
-                            <span class="badge badge-code ms-2">
-                                <i class="bi bi-code-slash"></i>
-                                Code
-                            </span>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="message-meta">
-                        <small>
-                            Line {{ message.line_number }}
-                            {% if message.timestamp %}
-                                • {{ message.timestamp }}
-                            {% endif %}
-                        </small>
-                    </div>
-                </div>
-                
-                <div class="message-content">
-                    {% if message.rendered_content %}
-                        {{ message.rendered_content | safe }}
+            <section class="terminal-turn {{ message.role or message.type }}" id="message-line-{{ message.line_number }}">
+                <div class="terminal-prompt">
+                    {% if message.role == 'user' or message.display_type == 'User' %}
+                        <span class="terminal-marker">user</span>
+                    {% elif message.role == 'assistant' or message.display_type == 'Assistant' %}
+                        <span class="terminal-marker">claude</span>
                     {% else %}
-                        <pre>{{ message.content }}</pre>
+                        <span class="terminal-marker">{{ message.display_type|lower }}</span>
                     {% endif %}
+                    <span class="terminal-line-meta">line {{ message.line_number }}</span>
                 </div>
-            </div>
+                <pre class="terminal-content">{{ message.content }}</pre>
+            </section>
         {% endfor %}
     </div>
 {% else %}
