@@ -540,6 +540,40 @@ return collected as text
             sessions[tty] = {"tty": tty, "title": title}
     return sessions
 
+def _list_terminal_ttys() -> Dict[str, Dict[str, str]]:
+    script = """
+set collected to {}
+tell application "Terminal"
+  repeat with w in windows
+    repeat with tb in tabs of w
+      set end of collected to ((tty of tb) & " | " & (custom title of tb))
+    end repeat
+  end repeat
+end tell
+set AppleScript's text item delimiters to linefeed
+return collected as text
+"""
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            text=True,
+            capture_output=True,
+            timeout=4,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return {}
+
+    if result.returncode != 0:
+        return {}
+
+    sessions: Dict[str, Dict[str, str]] = {}
+    for line in result.stdout.splitlines():
+        tty, separator, title = line.partition(" | ")
+        if separator and tty:
+            sessions[tty] = {"tty": tty, "title": title}
+    return sessions
+
 def _resolve_live_terminal(session_id: str) -> Optional[Dict[str, Any]]:
     registry = _load_live_claude_registry(session_id)
     cmux_target = _load_cmux_target(session_id)
@@ -572,6 +606,17 @@ def _resolve_live_terminal(session_id: str) -> Optional[Dict[str, Any]]:
             "session_id": session_id,
             "tty": tty_path,
             "title": iterm_sessions[tty_path].get("title", ""),
+            "registry": registry,
+            "live": True,
+        }
+
+    terminal_sessions = _list_terminal_ttys()
+    if tty_path in terminal_sessions:
+        return {
+            "transport": "terminal",
+            "session_id": session_id,
+            "tty": tty_path,
+            "title": terminal_sessions[tty_path].get("title", ""),
             "registry": registry,
             "live": True,
         }
@@ -648,6 +693,37 @@ end run
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "iTerm2 send failed")
+
+def _send_to_terminal(tty: str, message: str) -> None:
+    script = """
+on run argv
+  set targetTty to item 1 of argv
+  set messageText to item 2 of argv
+  tell application "Terminal"
+    set targetTab to missing value
+    repeat with w in windows
+      repeat with tb in tabs of w
+        if tty of tb is targetTty then
+          set targetTab to tb
+          exit repeat
+        end if
+      end repeat
+      if targetTab is not missing value then exit repeat
+    end repeat
+    if targetTab is missing value then error "target Terminal tab not found"
+    do script messageText in targetTab
+  end tell
+end run
+"""
+    result = subprocess.run(
+        ["osascript", "-e", script, tty, message],
+        text=True,
+        capture_output=True,
+        timeout=5,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "Terminal send failed")
 
 def _public_terminal_target(target: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not target:
@@ -978,6 +1054,8 @@ async def send_session_message(request: SessionSendRequest):
             _send_to_cmux(target["panel_id"], message)
         elif transport == "iterm2":
             _send_to_iterm(target["tty"], message)
+        elif transport == "terminal":
+            _send_to_terminal(target["tty"], message)
         else:
             reason = target.get("reason") or "This terminal type is not supported yet"
             raise HTTPException(status_code=409, detail=reason)
