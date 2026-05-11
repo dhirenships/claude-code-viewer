@@ -2,6 +2,10 @@
 
 class ClaudeViewer {
     constructor() {
+        this.liveSource = null;
+        this.liveSessionId = null;
+        this.liveAssistantContent = null;
+        this.liveAssistantText = '';
         this.init();
     }
 
@@ -11,6 +15,7 @@ class ClaudeViewer {
         this.setupSearch();
         this.setupSidebar();
         this.setupConversationScroll();
+        this.setupLiveClaude();
     }
 
     setupEventListeners() {
@@ -231,6 +236,231 @@ class ClaudeViewer {
                 behavior: 'auto'
             });
         });
+    }
+
+    setupLiveClaude() {
+        const form = document.getElementById('live-claude-form');
+        if (!form) return;
+
+        form.addEventListener('submit', (event) => this.startLiveClaude(event));
+    }
+
+    async startLiveClaude(event) {
+        event.preventDefault();
+
+        const input = document.getElementById('live-claude-prompt');
+        const prompt = input?.value.trim();
+        if (!prompt) return;
+
+        this.closeLiveSource();
+        this.showLivePanel(prompt);
+        this.setLiveStatus('starting');
+
+        try {
+            const response = await fetch('/api/live/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt,
+                    session_id: this.liveSessionId,
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.detail || 'Unable to start Claude');
+            }
+
+            const job = await response.json();
+            if (job.session_id) {
+                this.liveSessionId = job.session_id;
+                this.setLiveSession(job.session_id);
+            }
+            this.openLiveStream(job.stream_url);
+            input.value = '';
+        } catch (error) {
+            this.setLiveStatus(error.message || 'failed');
+            this.appendLiveSystemMessage(error.message || 'Unable to start Claude');
+        }
+    }
+
+    openLiveStream(streamUrl) {
+        const source = new EventSource(streamUrl);
+        this.liveSource = source;
+
+        source.addEventListener('init', (event) => {
+            const data = this.parseLiveEvent(event);
+            if (data?.session_id) {
+                this.liveSessionId = data.session_id;
+                this.setLiveSession(data.session_id);
+            }
+            this.setLiveStatus(data?.model ? `running / ${data.model}` : 'running');
+        });
+
+        source.addEventListener('status', (event) => {
+            const data = this.parseLiveEvent(event);
+            if (data?.session_id) {
+                this.liveSessionId = data.session_id;
+                this.setLiveSession(data.session_id);
+            }
+            if (data?.status) {
+                this.setLiveStatus(data.status);
+            }
+        });
+
+        source.addEventListener('assistant_start', () => {
+            this.ensureLiveAssistantMessage();
+        });
+
+        source.addEventListener('delta', (event) => {
+            const data = this.parseLiveEvent(event);
+            this.appendLiveAssistantDelta(data?.text || '');
+        });
+
+        source.addEventListener('raw', (event) => {
+            const data = this.parseLiveEvent(event);
+            if (data?.text) {
+                this.appendLiveSystemMessage(data.text);
+            }
+        });
+
+        source.addEventListener('result', (event) => {
+            const data = this.parseLiveEvent(event);
+            if (data?.session_id) {
+                this.liveSessionId = data.session_id;
+                this.setLiveSession(data.session_id);
+            }
+            this.setLiveStatus(data?.status || 'complete');
+        });
+
+        source.addEventListener('done', (event) => {
+            const data = this.parseLiveEvent(event);
+            this.setLiveStatus(data?.status || 'done');
+            this.closeLiveSource();
+            if (data?.session_id) {
+                this.liveSessionId = data.session_id;
+                this.setLiveSession(data.session_id);
+            }
+            if (data?.conversation_url) {
+                setTimeout(() => this.showPersistedConversation(data), 900);
+            }
+        });
+
+        source.addEventListener('error', () => {
+            if (source.readyState === EventSource.CLOSED) return;
+            this.setLiveStatus('stream interrupted');
+        });
+    }
+
+    parseLiveEvent(event) {
+        try {
+            return JSON.parse(event.data || '{}');
+        } catch {
+            return {};
+        }
+    }
+
+    showLivePanel(prompt) {
+        const panel = document.getElementById('live-claude-panel');
+        const frame = document.getElementById('conversation-frame');
+        const messages = document.getElementById('live-claude-messages');
+        if (!panel || !messages) return;
+
+        panel.classList.remove('d-none');
+        if (frame) frame.classList.add('d-none');
+        messages.innerHTML = '';
+        this.liveAssistantContent = null;
+        this.liveAssistantText = '';
+        this.appendLiveMessage('user', 'User', prompt);
+        this.ensureLiveAssistantMessage();
+        this.scrollLivePanel();
+    }
+
+    appendLiveMessage(role, label, text) {
+        const messages = document.getElementById('live-claude-messages');
+        if (!messages) return null;
+
+        const message = document.createElement('div');
+        message.className = `live-message ${role}`;
+
+        const header = document.createElement('div');
+        header.className = 'live-message-header';
+        header.textContent = label;
+
+        const content = document.createElement('div');
+        content.className = 'live-message-content';
+        content.textContent = text;
+
+        message.append(header, content);
+        messages.appendChild(message);
+        this.scrollLivePanel();
+        return content;
+    }
+
+    ensureLiveAssistantMessage() {
+        if (this.liveAssistantContent) return;
+
+        this.liveAssistantContent = this.appendLiveMessage('assistant', 'Claude', '');
+    }
+
+    appendLiveAssistantDelta(text) {
+        if (!text) return;
+
+        this.ensureLiveAssistantMessage();
+        this.liveAssistantText += text;
+        this.liveAssistantContent.textContent = this.liveAssistantText;
+        this.scrollLivePanel();
+    }
+
+    appendLiveSystemMessage(text) {
+        this.appendLiveMessage('system', 'System', text);
+    }
+
+    setLiveStatus(status) {
+        const statusEl = document.getElementById('live-claude-status');
+        if (statusEl) {
+            statusEl.textContent = status;
+        }
+    }
+
+    setLiveSession(sessionId) {
+        const sessionEl = document.getElementById('live-claude-session');
+        if (sessionEl) {
+            sessionEl.textContent = `Session ${sessionId.slice(0, 8)}...`;
+        }
+    }
+
+    showPersistedConversation(data) {
+        const panel = document.getElementById('live-claude-panel');
+        const frame = document.getElementById('conversation-frame');
+        if (!frame || !data.conversation_url) return;
+
+        frame.src = data.conversation_url;
+        frame.classList.remove('d-none');
+        if (panel) panel.classList.add('d-none');
+
+        const url = new URL(window.location);
+        url.pathname = '/';
+        if (data.project_name) url.searchParams.set('project', data.project_name);
+        if (data.session_id) url.searchParams.set('session', data.session_id);
+        window.history.pushState({
+            project: data.project_name,
+            session: data.session_id,
+        }, '', url);
+    }
+
+    scrollLivePanel() {
+        const messages = document.getElementById('live-claude-messages');
+        if (messages) {
+            messages.scrollTop = messages.scrollHeight;
+        }
+    }
+
+    closeLiveSource() {
+        if (this.liveSource) {
+            this.liveSource.close();
+            this.liveSource = null;
+        }
     }
 
     toggleTheme() {

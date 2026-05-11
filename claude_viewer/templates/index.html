@@ -12,29 +12,46 @@
 {% if projects %}
 <div class="sessions-page">
 <div class="global-search-shell">
-    <form class="global-search-form" method="get" action="/">
-        <label for="global-search">Search all sessions</label>
-        <div class="global-search-row">
-            <input
-                id="global-search"
-                name="q"
-                class="global-search-input"
-                type="search"
-                placeholder="Search every user and claude message..."
-                value="{{ global_search or '' }}"
-            >
-            <button type="submit" class="search-btn">
-                <i class="bi bi-search me-1"></i>
-                Search
-            </button>
-            {% if global_search %}
-                <a class="clear-global-search" href="/">
-                    <i class="bi bi-x-circle me-1"></i>
-                    Clear
-                </a>
-            {% endif %}
-        </div>
-    </form>
+    <div class="top-tools">
+        <form class="global-search-form" method="get" action="/">
+            <label for="global-search">Search all sessions</label>
+            <div class="global-search-row">
+                <input
+                    id="global-search"
+                    name="q"
+                    class="global-search-input"
+                    type="search"
+                    placeholder="Search every user and claude message..."
+                    value="{{ global_search or '' }}"
+                >
+                <button type="submit" class="search-btn" title="Search">
+                    <i class="bi bi-search"></i>
+                </button>
+                {% if global_search %}
+                    <a class="clear-global-search" href="/" title="Clear search">
+                        <i class="bi bi-x-circle"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </form>
+
+        <form class="live-claude-form" id="live-claude-form">
+            <label for="live-claude-prompt">Live Claude</label>
+            <div class="live-claude-row">
+                <input
+                    id="live-claude-prompt"
+                    class="live-claude-input"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="Ask Claude and stream the reply..."
+                >
+                <button type="submit" class="live-claude-submit" title="Run Claude">
+                    <i class="bi bi-play-fill"></i>
+                </button>
+            </div>
+            <div class="live-claude-status" id="live-claude-status">idle</div>
+        </form>
+    </div>
 
     {% if global_search %}
         <div class="global-search-results">
@@ -155,7 +172,15 @@
     <section class="home-overview">
         <div class="conversation-panel">
             {% if recent_sessions %}
+                <div class="live-claude-panel d-none" id="live-claude-panel">
+                    <div class="live-claude-panel-header">
+                        <span id="live-claude-panel-title">Live Claude</span>
+                        <span id="live-claude-session"></span>
+                    </div>
+                    <div class="live-claude-messages" id="live-claude-messages"></div>
+                </div>
                 <iframe
+                    id="conversation-frame"
                     class="conversation-frame"
                     name="conversation-frame"
                     title="Conversation viewer"

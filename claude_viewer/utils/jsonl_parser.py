@@ -194,6 +194,7 @@ class JSONLParser:
             "line_number": line_num,
             "raw_type": data.get("type", "unknown"),
             "timestamp": data.get("timestamp"),
+            "is_meta": data.get("isMeta", False),
         }
         
         # Handle different message types
@@ -220,6 +221,7 @@ class JSONLParser:
                 "role": data.get("type"),
                 "content": content,
                 "display_type": data.get("type", "").title(),
+                "model": message_data.get("model"),
                 "has_code": self._contains_code(content)
             }
         elif "role" in data:
@@ -235,6 +237,7 @@ class JSONLParser:
                 "role": data.get("role"),
                 "content": content,
                 "display_type": data.get("role", "").title(),
+                "model": data.get("model"),
                 "has_code": self._contains_code(content)
             }
         else:
@@ -364,6 +367,13 @@ class JSONLParser:
         """Apply search and type filters"""
         
         role = message.get("role", "").lower()
+        content = str(message.get("content", ""))
+
+        if message.get("is_meta"):
+            return False
+
+        if message.get("model") == "<synthetic>" and content == "No response requested.":
+            return False
 
         # Type filter. By default the viewer focuses on the real conversation
         # turns and hides summaries, tool/system records, and other JSONL noise.

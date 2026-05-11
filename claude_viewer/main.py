@@ -1,9 +1,15 @@
 """FastAPI main application for Claude Code Viewer."""
 
+import asyncio
+import json
 import os
+import subprocess
+import threading
+import time
+import uuid
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -40,6 +46,8 @@ app = FastAPI(
 # Setup static files and templates
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+LIVE_JOBS: Dict[str, Dict[str, Any]] = {}
+LIVE_JOBS_LOCK = threading.Lock()
 
 # Initialize parser with custom path from environment
 def get_parser():
@@ -82,6 +90,10 @@ class ConversationResponse(BaseModel):
     page: int
     per_page: int
     total_pages: int
+
+class LiveClaudeRequest(BaseModel):
+    prompt: str
+    session_id: Optional[str] = None
 
 # Custom markdown renderer with syntax highlighting
 def render_markdown_with_code(text: str) -> str:
@@ -157,6 +169,208 @@ def process_markdown_text(text: str) -> str:
     html = markdown.markdown(text, extensions=['tables', 'fenced_code'])
     
     return html
+
+def get_current_project_name() -> str:
+    """Return Claude's project directory name for this viewer process cwd."""
+    cwd = os.getcwd().rstrip(os.sep)
+    return "-" + cwd.lstrip(os.sep).replace(os.sep, "-")
+
+def _live_conversation_url(project_name: str, session_id: str) -> str:
+    return f"/conversation/{project_name}/{session_id}?embedded=true"
+
+def _append_live_event(job: Dict[str, Any], event_type: str, data: Dict[str, Any]) -> None:
+    data.setdefault("job_id", job["id"])
+    with job["condition"]:
+        job["events"].append({
+            "event": event_type,
+            "data": data,
+            "created_at": time.time(),
+        })
+        job["condition"].notify_all()
+
+def _run_live_claude_job(job: Dict[str, Any]) -> None:
+    project_name = get_current_project_name()
+    job["project_name"] = project_name
+    requested_session_id = job.get("requested_session_id")
+    session_id = requested_session_id or job["session_id"]
+    job["session_id"] = session_id
+
+    cmd = [
+        "claude",
+        "-p",
+        "--verbose",
+        "--output-format",
+        "stream-json",
+        "--include-partial-messages",
+        "--permission-mode",
+        "acceptEdits",
+    ]
+    if requested_session_id:
+        cmd.extend(["--resume", requested_session_id])
+    else:
+        cmd.extend(["--session-id", session_id])
+    cmd.append(job["prompt"])
+
+    job["cmd"] = cmd
+    _append_live_event(job, "status", {
+        "status": "starting",
+        "session_id": session_id,
+        "project_name": project_name,
+    })
+
+    try:
+        process = subprocess.Popen(
+            cmd,
+            cwd=os.getcwd(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+    except OSError as exc:
+        job["status"] = "failed"
+        _append_live_event(job, "error", {
+            "status": "failed",
+            "message": str(exc),
+            "session_id": session_id,
+            "project_name": project_name,
+        })
+        _append_live_event(job, "done", {
+            "status": "failed",
+            "returncode": None,
+            "session_id": session_id,
+            "project_name": project_name,
+        })
+        return
+
+    job["process"] = process
+    job["status"] = "running"
+    buffer = ""
+
+    def handle_json_row(row: Dict[str, Any]) -> None:
+        nonlocal session_id
+
+        row_session_id = row.get("session_id")
+        if row_session_id and row_session_id != session_id:
+            session_id = row_session_id
+            job["session_id"] = session_id
+
+        row_type = row.get("type")
+        if row_type == "system" and row.get("subtype") == "init":
+            _append_live_event(job, "init", {
+                "session_id": row.get("session_id") or session_id,
+                "project_name": project_name,
+                "model": row.get("model"),
+                "cwd": row.get("cwd"),
+            })
+        elif row_type == "system" and row.get("subtype") == "status":
+            _append_live_event(job, "status", {
+                "status": row.get("status") or "running",
+                "session_id": session_id,
+                "project_name": project_name,
+            })
+        elif row_type == "rate_limit_event":
+            _append_live_event(job, "rate_limit", {
+                "session_id": session_id,
+                "project_name": project_name,
+                "rate_limit_info": row.get("rate_limit_info", {}),
+            })
+        elif row_type == "stream_event":
+            stream_event = row.get("event", {})
+            if stream_event.get("type") == "content_block_start":
+                block = stream_event.get("content_block", {})
+                if block.get("type") == "text":
+                    _append_live_event(job, "assistant_start", {
+                        "index": stream_event.get("index"),
+                        "session_id": session_id,
+                        "project_name": project_name,
+                    })
+            elif stream_event.get("type") == "content_block_delta":
+                delta = stream_event.get("delta", {})
+                if delta.get("type") == "text_delta":
+                    text = delta.get("text", "")
+                    job["assistant_text"] += text
+                    _append_live_event(job, "delta", {
+                        "text": text,
+                        "index": stream_event.get("index"),
+                        "session_id": session_id,
+                        "project_name": project_name,
+                    })
+            elif stream_event.get("type") == "message_stop":
+                _append_live_event(job, "message_stop", {
+                    "session_id": session_id,
+                    "project_name": project_name,
+                })
+        elif row_type == "assistant":
+            message = row.get("message", {})
+            _append_live_event(job, "assistant_snapshot", {
+                "session_id": session_id,
+                "project_name": project_name,
+                "content": message.get("content", []),
+            })
+        elif row_type == "result":
+            status = "failed" if row.get("is_error") else row.get("subtype", "done")
+            _append_live_event(job, "result", {
+                "status": status,
+                "session_id": row.get("session_id") or session_id,
+                "project_name": project_name,
+                "conversation_url": _live_conversation_url(project_name, row.get("session_id") or session_id),
+                "result": row.get("result", ""),
+                "stop_reason": row.get("stop_reason"),
+                "duration_ms": row.get("duration_ms"),
+                "usage": row.get("usage", {}),
+            })
+
+    assert process.stdout is not None
+    for chunk in iter(lambda: process.stdout.read(1), ""):
+        buffer += chunk
+        if "\n" not in buffer:
+            continue
+
+        lines = buffer.splitlines(keepends=True)
+        if not lines[-1].endswith(("\n", "\r")):
+            buffer = lines.pop()
+        else:
+            buffer = ""
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                handle_json_row(json.loads(line))
+            except json.JSONDecodeError:
+                _append_live_event(job, "raw", {
+                    "text": line,
+                    "session_id": session_id,
+                    "project_name": project_name,
+                })
+
+    if buffer.strip():
+        try:
+            handle_json_row(json.loads(buffer.strip()))
+        except json.JSONDecodeError:
+            _append_live_event(job, "raw", {
+                "text": buffer.strip(),
+                "session_id": session_id,
+                "project_name": project_name,
+            })
+
+    returncode = process.wait()
+    job["returncode"] = returncode
+    job["status"] = "done" if returncode == 0 else "failed"
+    _append_live_event(job, "done", {
+        "status": job["status"],
+        "returncode": returncode,
+        "session_id": session_id,
+        "project_name": project_name,
+        "conversation_url": _live_conversation_url(project_name, session_id),
+    })
+
+def _format_sse(event: str, data: Dict[str, Any], event_id: int) -> str:
+    return f"id: {event_id}\nevent: {event}\ndata: {json.dumps(data)}\n\n"
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -304,6 +518,77 @@ async def get_conversation(
     )
     
     return ConversationResponse(**conversation)
+
+@app.post("/api/live/start")
+async def start_live_claude(request: LiveClaudeRequest):
+    """Start a Claude CLI turn and stream its partial message events."""
+    prompt = request.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Prompt is required")
+
+    job_id = str(uuid.uuid4())
+    session_id = request.session_id.strip() if request.session_id else None
+    initial_session_id = session_id or str(uuid.uuid4())
+    job = {
+        "id": job_id,
+        "prompt": prompt,
+        "requested_session_id": session_id,
+        "session_id": initial_session_id,
+        "project_name": get_current_project_name(),
+        "status": "queued",
+        "returncode": None,
+        "assistant_text": "",
+        "events": [],
+        "condition": threading.Condition(),
+        "created_at": time.time(),
+    }
+
+    with LIVE_JOBS_LOCK:
+        LIVE_JOBS[job_id] = job
+
+    thread = threading.Thread(target=_run_live_claude_job, args=(job,), daemon=True)
+    job["thread"] = thread
+    thread.start()
+
+    return {
+        "job_id": job_id,
+        "session_id": job["session_id"],
+        "project_name": job["project_name"],
+        "stream_url": f"/api/live/{job_id}/events",
+    }
+
+@app.get("/api/live/{job_id}/events")
+async def stream_live_claude(job_id: str):
+    """SSE stream for a running live Claude job."""
+    with LIVE_JOBS_LOCK:
+        job = LIVE_JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Live job not found")
+
+    async def event_generator():
+        cursor = 0
+        while True:
+            with job["condition"]:
+                events = job["events"][cursor:]
+                cursor += len(events)
+                done = job["status"] in {"done", "failed"} and not events
+
+            for index, event in enumerate(events, cursor - len(events)):
+                yield _format_sse(event["event"], event["data"], index)
+
+            if done:
+                break
+
+            await asyncio.sleep(0.1)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 @app.get("/health")
 async def health_check():

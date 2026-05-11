@@ -98,6 +98,13 @@ main.container:has(.sessions-page) {
     background: var(--dark-bg);
 }
 
+.top-tools {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.85fr) minmax(320px, 1.15fr);
+    gap: 0.6rem;
+    align-items: stretch;
+}
+
 .global-search-form {
     background: white;
     border: 1px solid #e2e8f0;
@@ -105,13 +112,22 @@ main.container:has(.sessions-page) {
     padding: 0.55rem 0.75rem;
 }
 
+.live-claude-form {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 0.55rem 0.75rem;
+}
+
 .dark-theme .global-search-form,
+.dark-theme .live-claude-form,
 .dark-theme .global-search-results {
     background-color: var(--dark-card);
     border-color: var(--dark-border);
 }
 
-.global-search-form label {
+.global-search-form label,
+.live-claude-form label {
     display: block;
     margin-bottom: 0.25rem;
     color: var(--secondary-color);
@@ -119,13 +135,15 @@ main.container:has(.sessions-page) {
     font-weight: 600;
 }
 
-.global-search-row {
+.global-search-row,
+.live-claude-row {
     display: flex;
     gap: 0.5rem;
     align-items: center;
 }
 
-.global-search-input {
+.global-search-input,
+.live-claude-input {
     flex: 1;
     min-width: 0;
     padding: 0.45rem 0.55rem;
@@ -134,10 +152,34 @@ main.container:has(.sessions-page) {
     font-size: 0.82rem;
 }
 
-.global-search-input:focus {
+.global-search-input:focus,
+.live-claude-input:focus {
     outline: none;
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.live-claude-submit {
+    display: inline-grid;
+    place-items: center;
+    width: 2.15rem;
+    height: 2.15rem;
+    border: 0;
+    border-radius: 0.35rem;
+    background: var(--success-color);
+    color: white;
+    cursor: pointer;
+}
+
+.live-claude-submit:hover {
+    background: #047857;
+}
+
+.live-claude-status {
+    min-height: 0.9rem;
+    margin-top: 0.2rem;
+    color: var(--secondary-color);
+    font-size: 0.68rem;
 }
 
 .clear-global-search {
@@ -487,6 +529,80 @@ main.container:has(.sessions-page) {
     border: 0;
     background: white;
     overscroll-behavior: contain;
+}
+
+.live-claude-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: white;
+}
+
+.dark-theme .live-claude-panel {
+    background: var(--dark-card);
+}
+
+.live-claude-panel-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: var(--secondary-color);
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.dark-theme .live-claude-panel-header {
+    border-color: var(--dark-border);
+}
+
+.live-claude-messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.live-message {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.45rem 0.75rem 0.6rem;
+}
+
+.dark-theme .live-message {
+    border-color: var(--dark-border);
+}
+
+.live-message-header {
+    margin-bottom: 0.2rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: lowercase;
+}
+
+.live-message.user .live-message-header {
+    color: var(--success-color);
+}
+
+.live-message.assistant .live-message-header {
+    color: var(--primary-color);
+}
+
+.live-message.system .live-message-header {
+    color: var(--warning-color);
+}
+
+.live-message-content {
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: #334155;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.dark-theme .live-message-content {
+    color: #e2e8f0;
 }
 
 .conversation-empty-state {
@@ -934,6 +1050,10 @@ code {
     }
 
     .home-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .top-tools {
         grid-template-columns: 1fr;
     }
 
