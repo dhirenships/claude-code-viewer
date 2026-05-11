@@ -98,6 +98,8 @@ if __name__ == "__main__":
     main()
 """
 
+SHARE_BASE_URL_FILE = Path.home() / ".claude" / "claude-viewer-share-base-url"
+
 
 @dataclass
 class StatuslineInstallResult:
@@ -223,3 +225,18 @@ def install_claude_statusline(
         backup_path=backup_path,
         message=message,
     )
+
+
+def write_share_base_url(viewer_base_url: str, path: Path = SHARE_BASE_URL_FILE) -> None:
+    """Persist the current LAN/share base URL for all local viewer processes."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(viewer_base_url.rstrip("/") + "\n")
+
+
+def read_share_base_url(path: Path = SHARE_BASE_URL_FILE) -> Optional[str]:
+    """Read the current LAN/share base URL written by the CLI, if present."""
+    try:
+        value = path.read_text().strip()
+    except OSError:
+        return None
+    return value or None

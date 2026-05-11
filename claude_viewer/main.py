@@ -25,7 +25,7 @@ from pygments.lexers import get_lexer_by_name, guess_lexer
 from pygments.formatters import HtmlFormatter
 from pygments.util import ClassNotFound
 import re
-from .statusline_setup import get_lan_ip
+from .statusline_setup import get_lan_ip, read_share_base_url
 
 # Get the package directory
 PACKAGE_DIR = Path(__file__).parent
@@ -285,6 +285,10 @@ def _request_port(request: Request) -> Optional[int]:
     return 443 if request.url.scheme == "https" else 80
 
 def _session_share_url(request: Request, session_id: str) -> str:
+    configured_base_url = os.environ.get("CLAUDE_VIEWER_SHARE_BASE_URL") or read_share_base_url()
+    if configured_base_url:
+        return f"{configured_base_url.rstrip('/')}/v/{session_id[:8]}"
+
     host = get_lan_ip() or request.url.hostname or "localhost"
     port = _request_port(request)
     netloc = f"{host}:{port}" if port not in {80, 443, None} else host

@@ -8,7 +8,12 @@ from pathlib import Path
 import uvicorn
 
 from . import __version__
-from .statusline_setup import install_claude_statusline, localhost_base_url_for_port, viewer_base_url_for_host
+from .statusline_setup import (
+    install_claude_statusline,
+    localhost_base_url_for_port,
+    viewer_base_url_for_host,
+    write_share_base_url,
+)
 
 
 def get_default_projects_path():
@@ -118,6 +123,8 @@ Examples:
     os.environ["CLAUDE_PROJECTS_PATH"] = str(Path(args.projects_path).expanduser().resolve())
     viewer_base_url = viewer_base_url_for_host(args.host, args.port)
     statusline_base_url = args.statusline_base_url or localhost_base_url_for_port(args.port)
+    os.environ["CLAUDE_VIEWER_SHARE_BASE_URL"] = viewer_base_url
+    write_share_base_url(viewer_base_url)
     
     print(f"⚡ Claude Code Viewer v{__version__}")
     print(f"📁 Using projects: {os.environ['CLAUDE_PROJECTS_PATH']}")
