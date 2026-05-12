@@ -26,14 +26,14 @@ class ClaudeViewer {
         this.setupLiveClaude();
         this.setupActivityPolling();
         this.setupMobileSidebar();
+        this.setupMobileGlobalSearch();
     }
 
     setupEventListeners() {
         // Theme toggle
-        const themeToggle = document.getElementById('theme-toggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', () => this.toggleTheme());
-        }
+        document.querySelectorAll('[data-theme-toggle]').forEach(toggle => {
+            toggle.addEventListener('click', () => this.toggleTheme());
+        });
 
         const frame = document.querySelector('iframe[name="conversation-frame"]');
         if (frame) {
@@ -110,6 +110,8 @@ class ClaudeViewer {
         if (group) {
             this.setProjectCollapsed(group, false);
         }
+
+        this.syncMobileGlobalSearchScope();
     }
 
     handleSessionClick(event, link) {
@@ -344,13 +346,17 @@ class ClaudeViewer {
             const s = document.querySelector('.session-sidebar');
             s?.classList.add('mobile-open');
             overlay?.classList.add('active');
+            document.body.classList.add('mobile-sidebar-open');
             document.body.style.overflow = 'hidden';
+            this.syncMobileGlobalSearchScope();
         };
         this._mobileSidebarClose = () => {
             const s = document.querySelector('.session-sidebar');
             s?.classList.remove('mobile-open');
             overlay?.classList.remove('active');
+            document.body.classList.remove('mobile-sidebar-open');
             document.body.style.overflow = '';
+            this.syncMobileGlobalSearchScope();
         };
 
         const toggle = () => {
@@ -369,6 +375,57 @@ class ClaudeViewer {
         });
 
         this.rebindMobileSidebar(sidebar);
+    }
+
+    setupMobileGlobalSearch() {
+        const form = document.querySelector('.global-search-form');
+        const filterToggle = document.getElementById('mobile-global-filter-toggle');
+        const projectSelect = form?.querySelector('select[name="project_filter"]');
+        if (!form) return;
+
+        const params = new URLSearchParams(window.location.search);
+        form.dataset.mobileProjectDefault = params.has('project_filter') ? 'false' : 'true';
+
+        filterToggle?.addEventListener('click', () => {
+            const isOpen = form.classList.toggle('mobile-filters-open');
+            filterToggle.setAttribute('aria-expanded', String(isOpen));
+        });
+
+        projectSelect?.addEventListener('change', () => {
+            form.dataset.mobileProjectDefault = 'false';
+            this.syncMobileGlobalSearchScope();
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!form.classList.contains('mobile-filters-open')) return;
+            if (form.contains(event.target) || filterToggle?.contains(event.target)) return;
+            form.classList.remove('mobile-filters-open');
+            filterToggle?.setAttribute('aria-expanded', 'false');
+        });
+
+        window.addEventListener('resize', () => this.syncMobileGlobalSearchScope());
+        this.syncMobileGlobalSearchScope();
+    }
+
+    syncMobileGlobalSearchScope() {
+        const form = document.querySelector('.global-search-form');
+        if (!form || window.innerWidth > 768) return;
+
+        const projectSelect = form.querySelector('select[name="project_filter"]');
+        const searchInput = form.querySelector('.global-search-input');
+        const activeProject = document.querySelector('.session-link.active')?.dataset.project || form.dataset.currentProject || '';
+        const sidebarOpen = document.querySelector('.session-sidebar')?.classList.contains('mobile-open');
+
+        if (projectSelect && form.dataset.mobileProjectDefault !== 'false') {
+            projectSelect.value = sidebarOpen ? '' : activeProject;
+        }
+
+        const searchingAllProjects = !projectSelect?.value || sidebarOpen;
+        if (searchInput) {
+            searchInput.placeholder = searchingAllProjects
+                ? 'Search all projects...'
+                : 'Search current project...';
+        }
     }
 
     rebindMobileSidebar(sidebar) {
@@ -901,21 +958,20 @@ class ClaudeViewer {
     }
 
     updateThemeToggle(theme) {
-        const toggle = document.getElementById('theme-toggle');
-        if (!toggle) return;
-
         const isDark = theme === 'dark';
-        const icon = toggle.querySelector('[data-theme-icon]');
-        const label = toggle.querySelector('[data-theme-label]');
-        toggle.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
-        toggle.setAttribute('title', isDark ? 'Switch to light theme' : 'Switch to dark theme');
-        toggle.classList.toggle('is-dark', isDark);
-        if (icon) {
-            icon.className = isDark ? 'bi bi-sun' : 'bi bi-moon-stars';
-        }
-        if (label) {
-            label.textContent = isDark ? 'Light' : 'Dark';
-        }
+        document.querySelectorAll('[data-theme-toggle]').forEach(toggle => {
+            const icon = toggle.querySelector('[data-theme-icon]');
+            const label = toggle.querySelector('[data-theme-label]');
+            toggle.setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+            toggle.setAttribute('title', isDark ? 'Switch to light theme' : 'Switch to dark theme');
+            toggle.classList.toggle('is-dark', isDark);
+            if (icon) {
+                icon.className = isDark ? 'bi bi-sun' : 'bi bi-moon-stars';
+            }
+            if (label) {
+                label.textContent = isDark ? 'Light' : 'Dark';
+            }
+        });
     }
 
     syncFrameTheme() {

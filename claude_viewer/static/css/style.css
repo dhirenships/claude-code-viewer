@@ -121,6 +121,7 @@ main.container:has(.sessions-page) {
 
 .global-search-shell {
     flex: 0 0 auto;
+    position: relative;
     z-index: 30;
     margin: 0;
     padding: 0;
@@ -298,6 +299,17 @@ main.container:has(.sessions-page) {
 
 .theme-toggle:hover {
     background: var(--surface-muted);
+}
+
+.mobile-global-filter-toggle,
+.sidebar-theme-toggle {
+    display: none;
+}
+
+.sidebar-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
 }
 
 .global-search-results {
@@ -1346,12 +1358,20 @@ code {
     align-items: center;
     gap: 0.3rem;
     min-width: 7.5rem;
+    overflow: hidden;
     color: var(--muted-color);
     font-size: 0.7rem;
     white-space: nowrap;
 }
 
+.session-send-target span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .live-dot {
+    flex: 0 0 auto;
     width: 0.45rem;
     height: 0.45rem;
     border-radius: 999px;
@@ -1502,7 +1522,7 @@ code {
     }
 
     .global-search-shell {
-        padding: 0.5rem;
+        padding: 0.4rem 0.5rem;
         border-bottom: 1px solid var(--border-color);
     }
 
@@ -1581,7 +1601,32 @@ code {
     .top-tools,
     .top-tools.live-claude-disabled {
         grid-template-columns: auto 1fr auto;
-        gap: 0.4rem;
+        gap: 0.35rem;
+    }
+
+    .top-tools > .theme-toggle {
+        display: none;
+    }
+
+    .mobile-global-filter-toggle {
+        display: inline-grid;
+        place-items: center;
+        align-self: stretch;
+        flex: 0 0 auto;
+        width: 2.4rem;
+        padding: 0;
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        background: var(--surface-bg);
+        color: var(--text-color);
+        cursor: pointer;
+        font-size: 1rem;
+    }
+
+    .mobile-global-filter-toggle:hover,
+    .mobile-global-filter-toggle[aria-expanded="true"] {
+        background: var(--surface-muted);
+        color: var(--primary-color);
     }
 
     /* Home layout: single column, fills remaining height */
@@ -1611,42 +1656,43 @@ code {
         will-change: transform;
     }
 
-    /* Search filters: horizontal scroll on mobile */
+    /* Search filters: overlay on mobile */
     .global-search-filters {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-    }
-
-    .global-search-filters::-webkit-scrollbar {
         display: none;
     }
 
+    .global-search-form.mobile-filters-open .global-search-filters {
+        position: absolute;
+        top: calc(100% + 0.35rem);
+        right: 0.5rem;
+        left: 0.5rem;
+        z-index: 42;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.4rem;
+        margin-top: 0;
+        padding: 0.5rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.55rem;
+        background: var(--surface-bg);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+    }
+
     .global-search-filters select,
-    .global-search-filters input[type="date"],
-    .global-filter-check {
-        flex: 0 0 auto;
+    .global-search-filters input[type="date"] {
+        width: 100%;
     }
 
     .global-search-filters select {
-        max-width: 6.5rem;
-        font-size: 0.65rem;
-        padding: 0.15rem 0.25rem;
-        height: 1.55rem;
+        max-width: none;
+        height: 2.15rem;
+        padding: 0.25rem 0.45rem;
+        font-size: 0.78rem;
     }
 
-    .global-search-filters input[type="date"] {
-        max-width: 6rem;
-        font-size: 0.65rem;
-        padding: 0.15rem 0.25rem;
-        height: 1.55rem;
-    }
-
+    .global-search-filters input[type="date"],
     .global-filter-check {
-        font-size: 0.65rem !important;
-        height: 1.55rem;
-        padding: 0 0.3rem;
+        display: none !important;
     }
 
     /* Bigger touch targets */
@@ -1763,7 +1809,7 @@ code {
 
     /* Extra padding so last message clears the fixed send bar */
     .conversation-view {
-        padding-bottom: 5rem;
+        padding-bottom: 7.25rem;
     }
 
     /* Force GPU layer on messages container — prevents iOS Safari blank-after-scroll */
@@ -1794,14 +1840,36 @@ code {
     }
 
     /* Conversation page: bigger send form touch targets */
+    .session-send-form {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "target status"
+            "input button";
+        gap: 0.35rem 0.45rem;
+        padding: 0.5rem 0.65rem calc(0.5rem + env(safe-area-inset-bottom));
+    }
+
+    .session-send-target {
+        grid-area: target;
+        min-width: 0;
+    }
+
     .session-send-input {
+        grid-area: input;
         height: 2.5rem;
         font-size: 0.85rem;
     }
 
     .session-send-button {
+        grid-area: button;
         width: 2.5rem;
         height: 2.5rem;
+    }
+
+    .session-send-status {
+        grid-area: status;
+        min-width: 0;
+        font-size: 0.68rem;
     }
 
     .session-share-qr {
@@ -1824,18 +1892,65 @@ code {
     /* Allow the search form to shrink below its content min-width so the grid
        doesn't overflow and push the theme toggle off-screen. */
     .global-search-form {
+        position: static;
         min-width: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
     }
 
-    /* Theme toggle: icon-only on mobile */
+    .global-search-row {
+        gap: 0.35rem;
+    }
+
+    .global-search-input {
+        height: 2.4rem;
+        padding: 0.45rem 0.55rem;
+        font-size: 0.82rem;
+    }
+
+    .global-search-row .search-btn {
+        width: 2.4rem;
+        min-height: 2.4rem;
+        padding: 0;
+    }
+
+    .global-search-row .clear-global-search {
+        display: inline-grid;
+        place-items: center;
+        width: 2.4rem;
+        height: 2.4rem;
+        border: 1px solid var(--border-color);
+        border-radius: 0.5rem;
+        background: var(--surface-bg);
+        font-size: 0.9rem;
+    }
+
+    /* Theme setting moves into the sidebar on mobile */
     .theme-toggle [data-theme-label] {
         display: none;
     }
 
-    .theme-toggle {
+    .sidebar-theme-toggle {
+        display: inline-grid;
+        place-items: center;
         padding: 0;
-        width: 2.4rem;
-        justify-content: center;
+        min-width: 0;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.35rem;
+    }
+
+    .embedded-view .search-filters {
+        padding: 0.35rem 0.65rem;
+    }
+
+    .embedded-view .search-filters form {
+        display: none;
+    }
+
+    .embedded-view .conversation-summary {
+        margin-top: 0;
     }
 
     /* Breadcrumb: compact single line */

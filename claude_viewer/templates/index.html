@@ -18,7 +18,7 @@
         <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle-btn" aria-label="Toggle sessions sidebar" title="Sessions">
             <i class="bi bi-layout-sidebar-reverse"></i>
         </button>
-        <form class="global-search-form" method="get" action="/">
+        <form class="global-search-form" method="get" action="/" data-current-project="{{ initial_project }}">
             <label for="global-search">Search all sessions</label>
             <div class="global-search-row">
                 <input
@@ -73,6 +73,17 @@
             </div>
         </form>
 
+        <button
+            type="button"
+            class="mobile-global-filter-toggle"
+            id="mobile-global-filter-toggle"
+            aria-label="Search filters"
+            aria-expanded="false"
+            title="Search filters"
+        >
+            <i class="bi bi-sliders2"></i>
+        </button>
+
         {# Live Claude streaming is hidden for now. See docs/live-claude-streaming-concept.md. #}
         <form class="live-claude-form" id="live-claude-form" hidden aria-hidden="true">
             <label for="live-claude-prompt">Live Claude</label>
@@ -91,7 +102,7 @@
             <div class="live-claude-status" id="live-claude-status">idle</div>
         </form>
 
-        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to dark theme" title="Switch theme">
+        <button type="button" class="theme-toggle" id="theme-toggle" data-theme-toggle aria-label="Switch to dark theme" title="Switch theme">
             <i class="bi bi-moon-stars" data-theme-icon></i>
             <span data-theme-label>Dark</span>
         </button>
@@ -162,9 +173,15 @@
                     {% endif %}
                 </p>
             </div>
-            <button type="button" class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Close sidebar">
-                <i class="bi bi-x-lg"></i>
-            </button>
+            <div class="sidebar-header-actions">
+                <button type="button" class="theme-toggle sidebar-theme-toggle" data-theme-toggle aria-label="Switch to dark theme" title="Switch theme">
+                    <i class="bi bi-moon-stars" data-theme-icon></i>
+                    <span data-theme-label>Dark</span>
+                </button>
+                <button type="button" class="sidebar-close-btn" id="sidebar-close-btn" aria-label="Close sidebar">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
         </div>
 
         <div class="project-session-groups">
