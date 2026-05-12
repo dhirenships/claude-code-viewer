@@ -1,157 +1,78 @@
-# Claude Code Viewer 🔍
+# cocoview
 
-Beautiful web interface for browsing your Claude Code conversation history with search, filtering, and syntax highlighting.
+A web UI for browsing your [Claude Code](https://docs.anthropic.com/en/docs/claude-code) conversation history.
 
-![Claude Code Viewer](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![Python](https://img.shields.io/badge/python-3.8+-green.svg)
-![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)
+Search across sessions, read syntax-highlighted code, inspect diffs and tool calls, and watch live Claude sessions update in real time.
 
-## ✨ Features
+![dashboard](screenshots/dashboard-dark.png)
 
-- 🔍 **Search conversations** - Find specific discussions across all your Claude Code history
-- 📂 **Project organization** - Browse conversations by project with session metadata
-- 💻 **Syntax highlighting** - Code blocks with proper language detection and copy buttons
-- 🎨 **Modern UI** - Clean, responsive interface with dark/light theme support
-- ⚡ **Fast pagination** - Handle large conversation histories efficiently
-- 🔧 **Tool visualization** - Clear display of tool usage and outputs
-
-## 🚀 Quick Start
-
-### Installation
+## Install
 
 ```bash
-pip install claude-code-viewer
+pip install cocoview
 ```
 
-### Usage
+## Usage
 
 ```bash
-# Start with default settings (looks for ~/.claude/projects)
-claude-viewer
-
-# Custom Claude projects path
-claude-viewer --projects-path /path/to/your/claude/projects
-
-# Custom port
-claude-viewer --port 8080
-
-# Accessible from other machines
-claude-viewer --host 0.0.0.0 --port 3000
+cocoview
 ```
 
-Then open your browser to: `http://localhost:6300`
+Opens at [localhost:6300](http://localhost:6300). It reads from `~/.claude/projects/` where Claude Code stores conversation JSONL files.
 
-## 📸 Screenshots
+### Options
 
-### Main Dashboard
-Browse all your Claude Code projects with session counts and quick stats.
-
-### Conversation View
-View conversations with:
-- Proper message formatting and line breaks
-- Syntax-highlighted code blocks with copy buttons
-- Tool usage visualization
-- Search and filtering capabilities
-
-## 🛠️ Command Line Options
-
-```bash
-claude-viewer --help
+```
+cocoview --port 8080                  # custom port
+cocoview --host 0.0.0.0              # expose on LAN
+cocoview --projects-path /other/path  # custom Claude projects dir
+cocoview --no-statusline              # skip Claude statusline integration
 ```
 
-**Available options:**
-- `--projects-path` - Path to Claude projects directory (default: `~/.claude/projects`)
-- `--host` - Host to bind the server (default: `127.0.0.1`)
-- `--port` - Port to run on (default: `6300`)
-- `--version` - Show version information
+## Features
 
-## 📁 How It Works
+**Session browser** -- All your Claude Code projects and sessions in a sidebar, sorted by recency. Click to read any conversation.
 
-Claude Code stores conversation history in JSONL files at `~/.claude/projects/`. This tool:
+**Full-text search** -- Search across every session. Filter by project, role, date range, or content type (code, errors, tool use, file edits).
 
-1. **Scans** your Claude projects directory
-2. **Parses** JSONL conversation files
-3. **Presents** them in a beautiful web interface
-4. **Enables** search and filtering across all conversations
+![light mode](screenshots/conversation-light.png)
 
-## 🔧 Development
+**Syntax highlighting** -- Code blocks render with language detection and proper highlighting via Pygments.
 
-### Local Development
+**Diff viewer** -- File edits from Claude's Edit tool display as green/red line diffs, so you can see exactly what changed.
+
+![diffs and tool output](screenshots/code-view.png)
+
+**Live sessions** -- If Claude Code is running in a terminal, cocoview detects it and streams updates. Works with iTerm2, Terminal.app, and [cmux](https://cmux.app). You can send messages to live sessions directly from the viewer.
+
+**Dark / light theme** -- Toggle in the top-right corner. Preference is saved.
+
+**QR code sharing** -- Each session gets a QR code link for quick access from your phone over LAN.
+
+**Mobile responsive** -- Works on phones and tablets.
+
+## How it works
+
+Claude Code stores every conversation as a JSONL file in `~/.claude/projects/<project-hash>/`. Each line is a JSON object representing a message, tool call, or tool result.
+
+cocoview parses these files, indexes them for search, and serves a web UI with FastAPI.
+
+## Development
 
 ```bash
-git clone https://github.com/desis123/claude-code-viewer
-cd claude-code-viewer
+git clone https://github.com/anthropics/cocoview.git
+cd cocoview
 pip install -e .
-claude-viewer
+cocoview
 ```
 
-### Project Structure
+The server auto-reloads on file changes during development.
 
-```
-claude-code-viewer/
-├── claude_viewer/          # Main package
-│   ├── cli.py             # Command line interface  
-│   ├── main.py            # FastAPI application
-│   └── utils/             # Utilities (JSONL parser)
-├── static/                # CSS, JavaScript
-├── templates/             # HTML templates
-└── setup.py              # Package configuration
-```
+## Requirements
 
-## 🤝 Contributing
+- Python 3.8+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (to generate conversation history)
 
-Contributions welcome! Please:
+## License
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-### Development Setup
-
-```bash
-git clone <your-fork>
-cd claude-code-viewer
-pip install -e ".[dev]"
-```
-
-## 📋 Requirements
-
-- **Python 3.8+**
-- **Claude Code** (to generate conversation history)
-- **Modern web browser**
-
-## 🐛 Troubleshooting
-
-### "Projects path does not exist"
-Make sure Claude Code has been used and has created conversation files. The default path is `~/.claude/projects`.
-
-### "No JSONL files found"
-Ensure you have used Claude Code and it has generated conversation history. Try specifying a custom path with `--projects-path`.
-
-### Port already in use
-Use a different port: `claude-viewer --port 8080`
-
-## 📄 License
-
-Apache 2.0 License - see [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Built with [FastAPI](https://fastapi.tiangolo.com/) and [Bootstrap](https://getbootstrap.com/)
-- Syntax highlighting by [Pygments](https://pygments.org/)
-- Created for the Claude Code community
-
-## 📊 Stats
-
-- 🎯 **Zero configuration** for most users
-- ⚡ **Sub-second startup** time
-- 🔍 **Full-text search** across all conversations
-- 📱 **Mobile responsive** design
-
----
-
-**Made with ❤️ for the Claude Code community**
-
-[Report Issues](https://github.com/desis123/claude-code-viewer/issues) • [Feature Requests](https://github.com/desis123/claude-code-viewer/issues/new)
+MIT

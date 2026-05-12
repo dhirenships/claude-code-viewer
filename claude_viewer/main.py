@@ -1,4 +1,4 @@
-"""FastAPI main application for Claude Code Viewer."""
+"""FastAPI main application for cocoview."""
 
 import asyncio
 import html
@@ -43,9 +43,9 @@ if not TEMPLATES_DIR.exists():
 
 # Create FastAPI app
 app = FastAPI(
-    title="Claude Code Conversation Viewer",
-    description="View, search and browse Claude Code conversation history",
-    version="1.0.0"
+    title="cocoview",
+    description="Web UI for browsing Claude Code conversation history",
+    version="1.1.0"
 )
 
 # Setup static files and templates

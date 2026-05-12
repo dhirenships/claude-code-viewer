@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command line interface for Claude Code Viewer."""
+"""Command line interface for cocoview."""
 
 import argparse
 import os
@@ -60,16 +60,16 @@ def validate_projects_path(path):
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        prog="claude-viewer",
-        description="Beautiful web viewer for Claude Code conversation history",
+        prog="cocoview",
+        description="Web UI for browsing Claude Code conversation history",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  claude-viewer                                    # Use default path (~/.claude/projects)
-  claude-viewer --port 8080                       # Custom port
-  claude-viewer --projects-path /custom/path      # Custom Claude projects path
-  claude-viewer --host 0.0.0.0 --port 3000      # Accessible from other machines
-  claude-viewer --no-statusline                   # Do not update Claude's statusline
+  cocoview                                    # Use default path (~/.claude/projects)
+  cocoview --port 8080                       # Custom port
+  cocoview --projects-path /custom/path      # Custom Claude projects path
+  cocoview --host 0.0.0.0 --port 3000      # Accessible from other machines
+  cocoview --no-statusline                   # Do not update Claude's statusline
         """
     )
     
@@ -97,7 +97,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"claude-viewer {__version__}"
+        version=f"cocoview {__version__}"
     )
 
     parser.add_argument(
@@ -126,7 +126,7 @@ Examples:
     os.environ["CLAUDE_VIEWER_SHARE_BASE_URL"] = viewer_base_url
     write_share_base_url(viewer_base_url)
     
-    print(f"⚡ Claude Code Viewer v{__version__}")
+    print(f"⚡ cocoview v{__version__}")
     print(f"📁 Using projects: {os.environ['CLAUDE_PROJECTS_PATH']}")
     print(f"🌐 Starting server at http://{args.host}:{args.port}")
     if viewer_base_url != f"http://{args.host}:{args.port}":
@@ -158,7 +158,7 @@ Examples:
             reload_includes=["*.py", "*.html", "*.css", "*.js"],
         )
     except KeyboardInterrupt:
-        print("\n👋 Claude Code Viewer stopped")
+        print("\n👋 cocoview stopped")
     except Exception as e:
         print(f"❌ Error starting server: {e}")
         sys.exit(1)

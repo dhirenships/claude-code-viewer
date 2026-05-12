@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Setup script for Claude Code Viewer."""
+"""Setup script for cocoview."""
 
 from setuptools import setup, find_packages
 import os
@@ -10,28 +10,28 @@ def read_readme():
     if os.path.exists(readme_path):
         with open(readme_path, 'r', encoding='utf-8') as f:
             return f.read()
-    return "Web viewer for Claude Code conversation history"
+    return "Web UI for browsing Claude Code conversation history"
 
 setup(
-    name="claude-code-viewer",
-    version="1.0.0",
-    description="Beautiful web viewer for Claude Code conversation history",
+    name="cocoview",
+    version="1.1.0",
+    description="Web UI for browsing Claude Code conversation history",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     author="Claude Code Community",
-    author_email="your-email@example.com",  # Update this
-    url="https://github.com/desis123/claude-code-viewer",  # Update this
+    url="https://github.com/anthropics/cocoview",
     packages=find_packages(),
     include_package_data=True,
     package_data={
         'claude_viewer': [
             'static/css/*.css',
-            'static/js/*.js', 
+            'static/js/*.js',
             'templates/*.html'
         ],
     },
     entry_points={
         'console_scripts': [
+            'cocoview=claude_viewer.cli:main',
             'claude-viewer=claude_viewer.cli:main',
         ],
     },
@@ -51,7 +51,7 @@ setup(
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: End Users/Desktop",
-        "License :: OSI Approved :: Apache Software License",
+        "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.8",
@@ -64,10 +64,10 @@ setup(
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Environment :: Web Environment",
     ],
-    keywords="claude ai conversation viewer web interface fastapi",
+    keywords="claude claude-code ai conversation viewer web cocoview",
     project_urls={
-        "Bug Reports": "https://github.com/desis123/claude-code-viewer/issues",
-        "Source": "https://github.com/desis123/claude-code-viewer",
-        "Documentation": "https://github.com/desis123/claude-code-viewer#readme",
+        "Bug Reports": "https://github.com/anthropics/cocoview/issues",
+        "Source": "https://github.com/anthropics/cocoview",
+        "Documentation": "https://github.com/anthropics/cocoview#readme",
     },
 )

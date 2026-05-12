@@ -3,23 +3,23 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "claude-code-viewer"
-description = "Beautiful web viewer for Claude Code conversation history"
+name = "cocoview"
+description = "Web UI for browsing Claude Code conversation history"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "Apache-2.0"}
+license = {text = "MIT"}
 authors = [
     {name = "Claude Code Community"},
 ]
 maintainers = [
     {name = "Claude Code Community"},
 ]
-keywords = ["claude", "ai", "conversation", "viewer", "web", "interface", "fastapi"]
+keywords = ["claude", "claude-code", "ai", "conversation", "viewer", "web", "cocoview"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -46,13 +46,13 @@ dependencies = [
 version = "1.1.0"
 
 [project.urls]
-Homepage = "https://github.com/desis123/claude-code-viewer"
-Documentation = "https://github.com/desis123/claude-code-viewer#readme"
-Repository = "https://github.com/desis123/claude-code-viewer.git"
-"Bug Reports" = "https://github.com/desis123/claude-code-viewer/issues"
-Changelog = "https://github.com/desis123/claude-code-viewer/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/anthropics/cocoview"
+Documentation = "https://github.com/anthropics/cocoview#readme"
+Repository = "https://github.com/anthropics/cocoview.git"
+"Bug Reports" = "https://github.com/anthropics/cocoview/issues"
 
 [project.scripts]
+cocoview = "claude_viewer.cli:main"
 claude-viewer = "claude_viewer.cli:main"
 
 [tool.setuptools]
