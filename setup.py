@@ -10,16 +10,16 @@ def read_readme():
     if os.path.exists(readme_path):
         with open(readme_path, 'r', encoding='utf-8') as f:
             return f.read()
-    return "Web UI for browsing Claude Code conversation history"
+    return "Local web UI for searching and controlling Claude Code sessions"
 
 setup(
     name="cocoview",
-    version="1.1.0",
-    description="Web UI for browsing Claude Code conversation history",
+    version="0.1.0",
+    description="Local web UI for searching and controlling Claude Code sessions",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     author="Claude Code Community",
-    url="https://github.com/anthropics/cocoview",
+    url="https://github.com/gdagitrep/claude-code-viewer",
     packages=find_packages(),
     include_package_data=True,
     package_data={
@@ -64,10 +64,10 @@ setup(
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Environment :: Web Environment",
     ],
-    keywords="claude claude-code ai conversation viewer web cocoview",
+    keywords="claude claude-code ai conversation viewer web local-first cocoview",
     project_urls={
-        "Bug Reports": "https://github.com/anthropics/cocoview/issues",
-        "Source": "https://github.com/anthropics/cocoview",
-        "Documentation": "https://github.com/anthropics/cocoview#readme",
+        "Bug Reports": "https://github.com/gdagitrep/claude-code-viewer/issues",
+        "Source": "https://github.com/gdagitrep/claude-code-viewer",
+        "Documentation": "https://github.com/gdagitrep/claude-code-viewer#readme",
     },
 )

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cocoview"
-description = "Web UI for browsing Claude Code conversation history"
+description = "Local web UI for searching and controlling Claude Code sessions"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
@@ -14,7 +14,7 @@ authors = [
 maintainers = [
     {name = "Claude Code Community"},
 ]
-keywords = ["claude", "claude-code", "ai", "conversation", "viewer", "web", "cocoview"]
+keywords = ["claude", "claude-code", "ai", "conversation", "viewer", "web", "local-first", "cocoview"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -43,13 +43,13 @@ dependencies = [
     "pygments>=2.16.1,<3.0.0",
     "qrcode>=7.4,<9.0",
 ]
-version = "1.1.0"
+version = "0.1.0"
 
 [project.urls]
-Homepage = "https://github.com/anthropics/cocoview"
-Documentation = "https://github.com/anthropics/cocoview#readme"
-Repository = "https://github.com/anthropics/cocoview.git"
-"Bug Reports" = "https://github.com/anthropics/cocoview/issues"
+Homepage = "https://github.com/gdagitrep/claude-code-viewer"
+Documentation = "https://github.com/gdagitrep/claude-code-viewer#readme"
+Repository = "https://github.com/gdagitrep/claude-code-viewer.git"
+"Bug Reports" = "https://github.com/gdagitrep/claude-code-viewer/issues"
 
 [project.scripts]
 cocoview = "claude_viewer.cli:main"

@@ -61,14 +61,14 @@ def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         prog="cocoview",
-        description="Web UI for browsing Claude Code conversation history",
+        description="Local web UI for searching and controlling Claude Code sessions",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   cocoview                                    # Use default path (~/.claude/projects)
   cocoview --port 8080                       # Custom port
   cocoview --projects-path /custom/path      # Custom Claude projects path
-  cocoview --host 0.0.0.0 --port 3000      # Accessible from other machines
+  cocoview --host 0.0.0.0 --port 3000        # Accessible from trusted LAN devices
   cocoview --no-statusline                   # Do not update Claude's statusline
         """
     )

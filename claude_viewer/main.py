@@ -25,6 +25,7 @@ from pygments.lexers import get_lexer_by_name, guess_lexer
 from pygments.formatters import HtmlFormatter
 from pygments.util import ClassNotFound
 import re
+from . import __description__, __version__
 from .statusline_setup import get_lan_ip, read_share_base_url
 
 # Get the package directory
@@ -44,8 +45,8 @@ if not TEMPLATES_DIR.exists():
 # Create FastAPI app
 app = FastAPI(
     title="cocoview",
-    description="Web UI for browsing Claude Code conversation history",
-    version="1.1.0"
+    description=__description__,
+    version=__version__
 )
 
 # Setup static files and templates
@@ -1442,7 +1443,7 @@ async def health_check():
     
     return {
         "status": "healthy",
-        "version": "1.0.0",
+        "version": __version__,
         "claude_projects_path": claude_path,
         "projects_directory_exists": projects_exist,
         "projects_count": len(parser.get_projects()) if projects_exist else 0

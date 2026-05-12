@@ -5,7 +5,16 @@ All notable changes to claude-code-viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2025-01-31
+## [0.1.0] - 2026-05-11
+
+### Added
+- Launch release under the cocoview package name.
+- Local web UI for searching and reviewing Claude Code sessions.
+- LAN sharing and QR links for opening sessions from a phone.
+- Live terminal session detection and browser-based message sending for supported terminals.
+- Statusline integration, mobile layout improvements, and dark/light themes.
+
+## [0.0.2] - 2025-01-31
 
 ### Added
 - **Diff Viewer**: Interactive diff visualization for Edit tool calls
@@ -28,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Responsive design for mobile diff viewing
 - Automatic detection of Edit tool calls in JSONL content
 
-## [1.0.0] - 2025-01-31
+## [0.0.1] - 2025-01-31
 
 ### Added
 - Initial release of Claude Code Viewer

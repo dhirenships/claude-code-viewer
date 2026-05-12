@@ -1,8 +1,8 @@
 # cocoview
 
-A web UI for browsing your [Claude Code](https://docs.anthropic.com/en/docs/claude-code) conversation history.
+A local web UI for searching, reviewing, and controlling your [Claude Code](https://docs.anthropic.com/en/docs/claude-code) sessions.
 
-Search across sessions, read syntax-highlighted code, inspect diffs and tool calls, and watch live Claude sessions update in real time.
+Open your Claude Code history in a browser, inspect diffs and tool calls, find old work fast, and send messages to live sessions from your desktop or phone over your local network.
 
 ![dashboard](screenshots/dashboard-dark.png)
 
@@ -18,7 +18,17 @@ pip install cocoview
 cocoview
 ```
 
-Opens at [localhost:6300](http://localhost:6300). It reads from `~/.claude/projects/` where Claude Code stores conversation JSONL files.
+Opens at [localhost:6300](http://localhost:6300). cocoview reads from `~/.claude/projects/`, where Claude Code stores conversation JSONL files.
+
+### Open from your phone
+
+Run cocoview on your computer and expose it to your local network:
+
+```bash
+cocoview --host 0.0.0.0
+```
+
+cocoview prints a LAN URL, and each session page includes a QR code you can scan from your phone. Your phone must be on the same network as your computer.
 
 ### Options
 
@@ -27,6 +37,7 @@ cocoview --port 8080                  # custom port
 cocoview --host 0.0.0.0              # expose on LAN
 cocoview --projects-path /other/path  # custom Claude projects dir
 cocoview --no-statusline              # skip Claude statusline integration
+cocoview --statusline-base-url URL    # custom URL shown in Claude's statusline
 ```
 
 ## Features
@@ -43,13 +54,25 @@ cocoview --no-statusline              # skip Claude statusline integration
 
 ![diffs and tool output](screenshots/code-view.png)
 
-**Live sessions** -- If Claude Code is running in a terminal, cocoview detects it and streams updates. Works with iTerm2, Terminal.app, and [cmux](https://cmux.app). You can send messages to live sessions directly from the viewer.
+**Live session control** -- If Claude Code is running in a supported terminal, cocoview detects the session, shows its live status, and lets you send messages directly from the browser. Works with iTerm2, Terminal.app, and [cmux](https://cmux.app).
 
 **Dark / light theme** -- Toggle in the top-right corner. Preference is saved.
 
 **QR code sharing** -- Each session gets a QR code link for quick access from your phone over LAN.
 
 **Mobile responsive** -- Works on phones and tablets.
+
+## Security
+
+cocoview is local-first. By default it binds to `127.0.0.1`, so only your computer can access it.
+
+Use `--host 0.0.0.0` only on a network you trust. That makes the viewer reachable from other devices on your LAN, including session history and any live-session send controls. Do not expose cocoview directly to the public internet.
+
+## How this differs from Claude Code Remote Control
+
+[Claude Code Remote Control](https://code.claude.com/docs/en/remote-control) is the official remote-control experience for Claude Code.
+
+cocoview is a local-first companion focused on your saved Claude Code work: fast history search, readable transcripts, syntax-highlighted code, diff inspection, LAN sharing, and browser-based control for live terminal sessions.
 
 ## How it works
 
@@ -60,8 +83,8 @@ cocoview parses these files, indexes them for search, and serves a web UI with F
 ## Development
 
 ```bash
-git clone https://github.com/anthropics/cocoview.git
-cd cocoview
+git clone https://github.com/gdagitrep/claude-code-viewer.git
+cd claude-code-viewer
 pip install -e .
 cocoview
 ```
