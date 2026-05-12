@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cocoview"
-description = "Local web UI for searching and controlling Claude Code sessions"
+description = "Local command center for Claude Code sessions"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
@@ -14,7 +14,7 @@ authors = [
 maintainers = [
     {name = "Claude Code Community"},
 ]
-keywords = ["claude", "claude-code", "ai", "conversation", "viewer", "web", "local-first", "cocoview"]
+keywords = ["claude", "claude-code", "ai", "conversation", "control", "console", "web", "local-first", "cocoview"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

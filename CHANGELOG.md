@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Launch release under the cocoview package name.
-- Local web UI for searching and reviewing Claude Code sessions.
+- Local command center for searching, reviewing, and controlling Claude Code sessions.
 - LAN sharing and QR links for opening sessions from a phone.
 - Live terminal session detection and browser-based message sending for supported terminals.
 - Statusline integration, mobile layout improvements, and dark/light themes.

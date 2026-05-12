@@ -61,7 +61,7 @@ def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
         prog="cocoview",
-        description="Local web UI for searching and controlling Claude Code sessions",
+        description="Local command center for Claude Code sessions",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

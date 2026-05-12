@@ -10,12 +10,12 @@ def read_readme():
     if os.path.exists(readme_path):
         with open(readme_path, 'r', encoding='utf-8') as f:
             return f.read()
-    return "Local web UI for searching and controlling Claude Code sessions"
+    return "Local command center for Claude Code sessions"
 
 setup(
     name="cocoview",
     version="0.1.0",
-    description="Local web UI for searching and controlling Claude Code sessions",
+    description="Local command center for Claude Code sessions",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     author="Claude Code Community",
@@ -64,7 +64,7 @@ setup(
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Environment :: Web Environment",
     ],
-    keywords="claude claude-code ai conversation viewer web local-first cocoview",
+    keywords="claude claude-code ai conversation control console web local-first cocoview",
     project_urls={
         "Bug Reports": "https://github.com/gdagitrep/claude-code-viewer/issues",
         "Source": "https://github.com/gdagitrep/claude-code-viewer",
