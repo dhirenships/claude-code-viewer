@@ -209,8 +209,9 @@ def process_markdown_text(text: str) -> str:
     # Process inline code
     text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
     
-    # Convert markdown to HTML
-    html = markdown.markdown(text, extensions=['tables', 'fenced_code'])
+    # Convert markdown to HTML while preserving Claude's terminal-style soft
+    # line breaks. Without nl2br, review lists get reflowed into one paragraph.
+    html = markdown.markdown(text, extensions=['tables', 'fenced_code', 'nl2br'])
     
     return html
 

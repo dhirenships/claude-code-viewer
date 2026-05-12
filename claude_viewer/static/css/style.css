@@ -19,6 +19,7 @@
     --muted-color: #64748b;
     --terminal-bg: #fbfdff;
     --terminal-text: #1f2937;
+    --terminal-strong: #000000;
     --terminal-prompt: #0369a1;
     --terminal-user: #047857;
     --terminal-system: #b45309;
@@ -36,6 +37,7 @@
     --muted-color: #94a3b8;
     --terminal-bg: #0b1020;
     --terminal-text: #d7dde8;
+    --terminal-strong: #f8fafc;
     --terminal-prompt: #7dd3fc;
     --terminal-user: #86efac;
     --terminal-system: #fbbf24;
@@ -735,6 +737,10 @@ main.container:has(.sessions-page) {
 }
 
 .terminal-turn {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.35rem;
+    align-items: start;
     margin: 0 0 0.95rem;
 }
 
@@ -753,11 +759,12 @@ main.container:has(.sessions-page) {
 
 .terminal-prompt {
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.18rem;
+    align-items: flex-start;
+    gap: 0;
+    margin: 0;
     color: var(--terminal-prompt);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
+    line-height: 1.45;
     white-space: nowrap;
 }
 
@@ -767,11 +774,6 @@ main.container:has(.sessions-page) {
 
 .terminal-turn.system .terminal-prompt {
     color: var(--terminal-system);
-}
-
-.terminal-marker::before {
-    content: "$ ";
-    color: var(--terminal-muted);
 }
 
 .terminal-line-meta {
@@ -786,7 +788,22 @@ main.container:has(.sessions-page) {
     background: transparent;
     color: inherit;
     font: inherit;
+    white-space: normal;
     word-break: break-word;
+}
+
+.terminal-content p,
+.terminal-content li {
+    white-space: pre-wrap;
+}
+
+.terminal-content ul,
+.terminal-content ol {
+    padding-left: 1.15rem;
+}
+
+.terminal-content li > p {
+    margin: 0;
 }
 
 .terminal-content mark {
@@ -810,6 +827,25 @@ main.container:has(.sessions-page) {
 .terminal-content pre:last-child,
 .terminal-content .code-block:last-child {
     margin-bottom: 0;
+}
+
+.terminal-content > :first-child {
+    margin-top: 0;
+}
+
+.terminal-content strong {
+    color: var(--terminal-strong);
+    font-weight: 800;
+}
+
+.terminal-turn.assistant .terminal-content strong {
+    color: #000000;
+    font-weight: 850;
+    text-shadow: 0 0 0 currentColor;
+}
+
+.dark-theme .terminal-turn.assistant .terminal-content strong {
+    color: #ffffff;
 }
 
 .terminal-content a,

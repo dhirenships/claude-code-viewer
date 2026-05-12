@@ -60,11 +60,11 @@
             {% endif %}
             <div class="filter-group">
                 <label for="search">Search Messages</label>
-                <input 
-                    type="text" 
-                    id="search" 
-                    name="search" 
-                    class="search-input" 
+                <input
+                    type="text"
+                    id="search"
+                    name="search"
+                    class="search-input"
                     placeholder="Search in conversation content..."
                     value="{{ search or '' }}"
                 >
@@ -78,7 +78,7 @@
                     <option value="100" {{ 'selected' if conversation.per_page == 100 else '' }}>100</option>
                 </select>
             </div>
-            
+
             <div class="filter-actions">
                 <button type="submit" class="search-btn" title="Search">
                     <i class="bi bi-search me-1"></i>
@@ -161,16 +161,19 @@
 {% if conversation.messages %}
     <div class="messages-container terminal-transcript">
         {% for message in conversation.messages %}
-            <section class="terminal-turn {{ message.role or message.type }} {{ 'search-target' if target_line and message.line_number == target_line else '' }}" id="message-line-{{ message.line_number }}">
+            <section
+                class="terminal-turn {{ message.role or message.type }} {{ 'search-target' if target_line and message.line_number == target_line else '' }}"
+                id="message-line-{{ message.line_number }}"
+                title="{{ message.timestamp or '' }}"
+            >
                 <div class="terminal-prompt">
                     {% if message.role == 'user' or message.display_type == 'User' %}
-                        <span class="terminal-marker">user</span>
+                        <span class="terminal-marker">&gt;</span>
                     {% elif message.role == 'assistant' or message.display_type == 'Assistant' %}
-                        <span class="terminal-marker">claude</span>
+                        <span class="terminal-marker">⏺</span>
                     {% else %}
                         <span class="terminal-marker">{{ message.display_type|lower }}</span>
                     {% endif %}
-                    <span class="terminal-line-meta">line {{ message.line_number }}</span>
                 </div>
                 <div class="terminal-content">{{ message.rendered_content | safe }}</div>
             </section>
@@ -202,10 +205,10 @@
 {% if conversation.total_pages > 1 %}
     <div class="pagination-container">
         <div class="pagination-info">
-            Page {{ conversation.page }} of {{ conversation.total_pages }} 
+            Page {{ conversation.page }} of {{ conversation.total_pages }}
             ({{ conversation.total }} total messages)
         </div>
-        
+
         <nav aria-label="Conversation pagination">
             <ul class="pagination mb-0">
                 <!-- Previous page -->
@@ -222,11 +225,11 @@
                         </span>
                     </li>
                 {% endif %}
-                
+
                 <!-- Page numbers -->
                 {% set start_page = [1, conversation.page - 2]|max %}
                 {% set end_page = [conversation.total_pages, conversation.page + 2]|min %}
-                
+
                 {% if start_page > 1 %}
                     <li class="page-item">
                         <a class="page-link" href="?page=1{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">1</a>
@@ -237,7 +240,7 @@
                         </li>
                     {% endif %}
                 {% endif %}
-                
+
                 {% for page_num in range(start_page, end_page + 1) %}
                     {% if page_num == conversation.page %}
                         <li class="page-item active">
@@ -249,7 +252,7 @@
                         </li>
                     {% endif %}
                 {% endfor %}
-                
+
                 {% if end_page < conversation.total_pages %}
                     {% if end_page < conversation.total_pages - 1 %}
                         <li class="page-item disabled">
@@ -260,7 +263,7 @@
                         <a class="page-link" href="?page={{ conversation.total_pages }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">{{ conversation.total_pages }}</a>
                     </li>
                 {% endif %}
-                
+
                 <!-- Next page -->
                 {% if conversation.page < conversation.total_pages %}
                     <li class="page-item">

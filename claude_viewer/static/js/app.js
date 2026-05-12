@@ -789,7 +789,7 @@ class ClaudeViewer {
         messages.innerHTML = '';
         this.liveAssistantContent = null;
         this.liveAssistantText = '';
-        this.appendLiveMessage('user', 'user', prompt);
+        this.appendLiveMessage('user', '>', prompt);
         this.ensureLiveAssistantMessage();
         this.scrollLivePanel();
     }
@@ -822,7 +822,7 @@ class ClaudeViewer {
     ensureLiveAssistantMessage() {
         if (this.liveAssistantContent) return;
 
-        this.liveAssistantContent = this.appendLiveMessage('assistant', 'claude', '');
+        this.liveAssistantContent = this.appendLiveMessage('assistant', '⏺', '');
     }
 
     appendLiveAssistantDelta(text) {
