@@ -780,6 +780,16 @@ main.container:has(.sessions-page) {
     white-space: nowrap;
 }
 
+.assistant-dot::before {
+    content: '';
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    margin-top: 0.28rem;
+    border-radius: 50%;
+    background: currentColor;
+}
+
 .terminal-turn.user .terminal-prompt {
     color: var(--terminal-user);
 }
@@ -1816,6 +1826,16 @@ code {
     .messages-container.terminal-transcript {
         transform: translateZ(0);
         -webkit-transform: translateZ(0);
+        padding: 0.45rem 0.5rem 1rem;
+    }
+
+    .terminal-turn {
+        column-gap: 0.25rem;
+    }
+
+    .terminal-content ul,
+    .terminal-content ol {
+        padding-left: 0.85rem;
     }
 
     /* Compact summary + hide recap on mobile */

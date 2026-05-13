@@ -37,14 +37,21 @@ class ClaudeViewer {
 
         const frame = document.querySelector('iframe[name="conversation-frame"]');
         if (frame) {
+            const forceRepaint = () => {
+                frame.style.display = 'none';
+                void frame.offsetHeight;
+                frame.style.display = '';
+            };
+
             frame.addEventListener('load', () => {
                 this.syncFrameTheme();
-                // After the iframe's own JS auto-scrolls its content, iOS Safari can leave
-                // the iframe GPU layer blank. Toggling opacity forces a GPU re-composite.
-                setTimeout(() => {
-                    frame.style.opacity = '0.9999';
-                    requestAnimationFrame(() => { frame.style.opacity = ''; });
-                }, 350);
+                setTimeout(forceRepaint, 600);
+            });
+
+            window.addEventListener('message', (e) => {
+                if (e.data === 'cocomon:scrolled') {
+                    setTimeout(forceRepaint, 80);
+                }
             });
         }
 
@@ -312,9 +319,19 @@ class ClaudeViewer {
                     const scrollEl = document.scrollingElement || document.documentElement;
                     scrollEl.scrollTop = scrollEl.scrollHeight;
                 }
-                // Reading offsetHeight forces a synchronous layout commit, ensuring
-                // iOS Safari rasterizes the newly visible content before yielding.
-                void document.body.offsetHeight;
+                if (window.parent !== window) {
+                    window.parent.postMessage('cocomon:scrolled', '*');
+                }
+                setTimeout(() => {
+                    const mc = document.querySelector('.messages-container');
+                    if (mc) {
+                        const pos = (document.scrollingElement || document.documentElement).scrollTop;
+                        mc.style.display = 'none';
+                        void mc.offsetHeight;
+                        mc.style.display = '';
+                        (document.scrollingElement || document.documentElement).scrollTop = pos;
+                    }
+                }, 200);
             });
         });
     }
