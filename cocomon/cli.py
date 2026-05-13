@@ -3,6 +3,10 @@
 
 import argparse
 import os
+import secrets
+import signal
+import socket
+import subprocess
 import sys
 from pathlib import Path
 import uvicorn
@@ -55,6 +59,23 @@ def validate_projects_path(path):
         return False
     
     return True
+
+
+def _find_port_pid(port):
+    """Find the PID of the process listening on a port, or None."""
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            text=True, capture_output=True, timeout=3, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    for line in result.stdout.strip().splitlines():
+        try:
+            return int(line)
+        except ValueError:
+            continue
+    return None
 
 
 def main():
@@ -112,9 +133,48 @@ Examples:
         default=None,
         help="Base URL to show in Claude's statusline (default: derived from --host/--port)"
     )
-    
+
+    parser.add_argument(
+        "--token",
+        type=str,
+        default=None,
+        help="Auth token for LAN access. Auto-generated when --host is non-localhost."
+    )
+
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        help="Disable auth token even when binding to a non-localhost host"
+    )
+
     args = parser.parse_args()
     
+    # Check if port is already in use
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((args.host, args.port))
+    except OSError:
+        pid = _find_port_pid(args.port)
+        if pid:
+            print(f"❌ Port {args.port} is already in use (pid {pid}).")
+            try:
+                answer = input("   Stop the other process and continue? [Y/n] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print()
+                sys.exit(1)
+            if answer in ("", "y", "yes"):
+                os.kill(pid, signal.SIGTERM)
+                print(f"   Stopped pid {pid}.")
+                import time
+                time.sleep(0.5)
+            else:
+                print(f"💡 Use --port to pick a different port.")
+                sys.exit(1)
+        else:
+            print(f"❌ Port {args.port} is already in use.")
+            print(f"💡 Use --port to pick a different port, or stop the other process.")
+            sys.exit(1)
+
     # Validate projects path
     if not validate_projects_path(args.projects_path):
         sys.exit(1)
@@ -125,12 +185,25 @@ Examples:
     statusline_base_url = args.statusline_base_url or localhost_base_url_for_port(args.port)
     os.environ["CLAUDE_VIEWER_SHARE_BASE_URL"] = viewer_base_url
     write_share_base_url(viewer_base_url)
-    
+
+    # Auth token: auto-generate for non-localhost hosts unless --no-auth
+    is_lan_host = args.host not in ("127.0.0.1", "localhost", "::1")
+    auth_token = None
+    if args.token:
+        auth_token = args.token
+    elif is_lan_host and not args.no_auth:
+        auth_token = secrets.token_urlsafe(16)
+    if auth_token:
+        os.environ["COCOMON_AUTH_TOKEN"] = auth_token
+
     print(f"⚡ cocomon v{__version__}")
     print(f"📁 Using projects: {os.environ['CLAUDE_PROJECTS_PATH']}")
     print(f"🌐 Starting server at http://{args.host}:{args.port}")
     if viewer_base_url != f"http://{args.host}:{args.port}":
         print(f"🌐 Open from LAN: {viewer_base_url}")
+    if auth_token:
+        print(f"🔒 Auth token: {auth_token}")
+        print(f"🔗 Authenticated URL: {viewer_base_url}?token={auth_token}")
     if not args.no_statusline:
         try:
             result = install_claude_statusline(statusline_base_url)

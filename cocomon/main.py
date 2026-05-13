@@ -49,6 +49,57 @@ app = FastAPI(
     version=__version__
 )
 
+AUTH_TOKEN = os.environ.get("COCOMON_AUTH_TOKEN")
+
+_AUTH_401_HTML = """<!DOCTYPE html>
+<html><head><title>cocomon</title>
+<style>body{font-family:system-ui;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#1a1a2e;color:#e0e0e0}
+.box{text-align:center;padding:2rem;border-radius:12px;background:#16213e;max-width:400px}
+input{padding:8px 12px;border:1px solid #555;border-radius:6px;background:#0f3460;color:#fff;width:200px}
+button{padding:8px 16px;border:none;border-radius:6px;background:#e94560;color:#fff;cursor:pointer;margin-left:8px}
+</style></head><body><div class="box">
+<h2>cocomon</h2><p>Auth token required</p>
+<form method="get"><input name="token" placeholder="Paste token here" autofocus>
+<button type="submit">Go</button></form>
+</div></body></html>"""
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if not AUTH_TOKEN:
+        return await call_next(request)
+
+    client_host = request.client.host if request.client else None
+    if client_host in ("127.0.0.1", "::1", "localhost"):
+        return await call_next(request)
+
+    path = request.url.path
+    if path == "/health" or path.startswith("/static/"):
+        return await call_next(request)
+
+    if request.cookies.get("cocomon_token") == AUTH_TOKEN:
+        return await call_next(request)
+
+    token_param = request.query_params.get("token")
+    if token_param == AUTH_TOKEN:
+        clean_params = {k: v for k, v in request.query_params.items() if k != "token"}
+        clean_qs = urlencode(clean_params) if clean_params else ""
+        clean_url = path
+        if clean_qs:
+            clean_url += f"?{clean_qs}"
+        response = RedirectResponse(url=clean_url, status_code=302)
+        response.set_cookie(
+            "cocomon_token",
+            AUTH_TOKEN,
+            httponly=True,
+            samesite="lax",
+            max_age=86400 * 30,
+        )
+        return response
+
+    return HTMLResponse(status_code=401, content=_AUTH_401_HTML)
+
+
 # Setup static files and templates
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -289,12 +340,16 @@ def _request_port(request: Request) -> Optional[int]:
 def _session_share_url(request: Request, session_id: str) -> str:
     configured_base_url = os.environ.get("CLAUDE_VIEWER_SHARE_BASE_URL") or read_share_base_url()
     if configured_base_url:
-        return f"{configured_base_url.rstrip('/')}/v/{session_id[:8]}"
+        url = f"{configured_base_url.rstrip('/')}/v/{session_id[:8]}"
+    else:
+        host = get_lan_ip() or request.url.hostname or "localhost"
+        port = _request_port(request)
+        netloc = f"{host}:{port}" if port not in {80, 443, None} else host
+        url = f"{request.url.scheme}://{netloc}/v/{session_id[:8]}"
 
-    host = get_lan_ip() or request.url.hostname or "localhost"
-    port = _request_port(request)
-    netloc = f"{host}:{port}" if port not in {80, 443, None} else host
-    return f"{request.url.scheme}://{netloc}/v/{session_id[:8]}"
+    if AUTH_TOKEN:
+        url += f"?token={AUTH_TOKEN}"
+    return url
 
 def _append_live_event(job: Dict[str, Any], event_type: str, data: Dict[str, Any]) -> None:
     data.setdefault("job_id", job["id"])
