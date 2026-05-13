@@ -32,7 +32,6 @@ setup(
     entry_points={
         'console_scripts': [
             'cocomon=cocomon.cli:main',
-            'cocoview=cocomon.cli:main',
         ],
     },
     install_requires=[

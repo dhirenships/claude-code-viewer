@@ -22,6 +22,12 @@ pip install cocomon
 cocomon
 ```
 
+If `cocomon` is not found after install, use:
+
+```bash
+python3 -m cocomon
+```
+
 Opens at [localhost:6300](http://localhost:6300). cocomon reads from `~/.claude/projects/`, where Claude Code stores conversation JSONL files.
 
 ### Open from your phone

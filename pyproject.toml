@@ -53,7 +53,6 @@ Repository = "https://github.com/gdagitrep/claude-code-viewer.git"
 
 [project.scripts]
 cocomon = "cocomon.cli:main"
-cocoview = "cocomon.cli:main"
 
 [tool.setuptools]
 packages = ["cocomon", "cocomon.utils"]
