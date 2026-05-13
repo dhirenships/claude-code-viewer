@@ -1,4 +1,4 @@
-"""Install Claude Code statusline integration for Claude Viewer."""
+"""Install Claude Code statusline integration for cocomon."""
 
 import json
 import shlex

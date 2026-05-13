@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Command line interface for cocoview."""
+"""Command line interface for cocomon."""
 
 import argparse
 import os
@@ -60,16 +60,16 @@ def validate_projects_path(path):
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        prog="cocoview",
+        prog="cocomon",
         description="Local command center for Claude Code sessions",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  cocoview                                    # Use default path (~/.claude/projects)
-  cocoview --port 8080                       # Custom port
-  cocoview --projects-path /custom/path      # Custom Claude projects path
-  cocoview --host 0.0.0.0 --port 3000        # Accessible from trusted LAN devices
-  cocoview --no-statusline                   # Do not update Claude's statusline
+  cocomon                                    # Use default path (~/.claude/projects)
+  cocomon --port 8080                       # Custom port
+  cocomon --projects-path /custom/path      # Custom Claude projects path
+  cocomon --host 0.0.0.0 --port 3000        # Accessible from trusted LAN devices
+  cocomon --no-statusline                   # Do not update Claude's statusline
         """
     )
     
@@ -97,7 +97,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"cocoview {__version__}"
+        version=f"cocomon {__version__}"
     )
 
     parser.add_argument(
@@ -126,7 +126,7 @@ Examples:
     os.environ["CLAUDE_VIEWER_SHARE_BASE_URL"] = viewer_base_url
     write_share_base_url(viewer_base_url)
     
-    print(f"⚡ cocoview v{__version__}")
+    print(f"⚡ cocomon v{__version__}")
     print(f"📁 Using projects: {os.environ['CLAUDE_PROJECTS_PATH']}")
     print(f"🌐 Starting server at http://{args.host}:{args.port}")
     if viewer_base_url != f"http://{args.host}:{args.port}":
@@ -148,7 +148,7 @@ Examples:
     
     try:
         uvicorn.run(
-            "claude_viewer.main:app",
+            "cocomon.main:app",
             host=args.host,
             port=args.port,
             log_level="info",
@@ -158,7 +158,7 @@ Examples:
             reload_includes=["*.py", "*.html", "*.css", "*.js"],
         )
     except KeyboardInterrupt:
-        print("\n👋 cocoview stopped")
+        print("\n👋 cocomon stopped")
     except Exception as e:
         print(f"❌ Error starting server: {e}")
         sys.exit(1)

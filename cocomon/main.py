@@ -1,4 +1,4 @@
-"""FastAPI main application for cocoview."""
+"""FastAPI main application for cocomon."""
 
 import asyncio
 import html
@@ -44,7 +44,7 @@ if not TEMPLATES_DIR.exists():
 
 # Create FastAPI app
 app = FastAPI(
-    title="cocoview",
+    title="cocomon",
     description=__description__,
     version=__version__
 )

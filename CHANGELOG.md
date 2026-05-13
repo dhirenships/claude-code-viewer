@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-05-11
 
 ### Added
-- Launch release under the cocoview package name.
+- Launch release under the cocomon package name.
 - Local command center for searching, reviewing, and controlling Claude Code sessions.
 - LAN sharing and QR links for opening sessions from a phone.
 - Live terminal session detection and browser-based message sending for supported terminals.

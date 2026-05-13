@@ -3,7 +3,7 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cocoview"
+name = "cocomon"
 description = "Local command center for Claude Code sessions"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -14,7 +14,7 @@ authors = [
 maintainers = [
     {name = "Claude Code Community"},
 ]
-keywords = ["claude", "claude-code", "ai", "conversation", "control", "console", "web", "local-first", "cocoview"]
+keywords = ["claude", "claude-code", "ai", "conversation", "monitor", "control", "console", "web", "local-first", "cocomon"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -52,14 +52,14 @@ Repository = "https://github.com/gdagitrep/claude-code-viewer.git"
 "Bug Reports" = "https://github.com/gdagitrep/claude-code-viewer/issues"
 
 [project.scripts]
-cocoview = "claude_viewer.cli:main"
-claude-viewer = "claude_viewer.cli:main"
+cocomon = "cocomon.cli:main"
+cocoview = "cocomon.cli:main"
 
 [tool.setuptools]
-packages = ["claude_viewer", "claude_viewer.utils"]
+packages = ["cocomon", "cocomon.utils"]
 
 [tool.setuptools.package-data]
-claude_viewer = ["static/css/*.css", "static/js/*.js", "templates/*.html"]
+cocomon = ["static/css/*.css", "static/js/*.js", "templates/*.html"]
 
 [tool.setuptools_scm]
-write_to = "claude_viewer/_version.py"
+write_to = "cocomon/_version.py"

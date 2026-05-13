@@ -30,13 +30,13 @@ The code is kept in place for future use:
 
 - `POST /api/live/start` starts a Claude CLI job.
 - `GET /api/live/{job_id}/events` streams parsed events over SSE.
-- `claude_viewer/static/js/app.js` appends `delta` events into a temporary live assistant message.
+- `cocomon/static/js/app.js` appends `delta` events into a temporary live assistant message.
 - When the job emits `done`, the UI loads the persisted conversation iframe using the returned `conversation_url`.
 - Follow-up prompts can reuse the same session with `--resume`.
 
 ## UI State
 
-The home-page Live Claude form is hidden in `claude_viewer/templates/index.html`.
+The home-page Live Claude form is hidden in `cocomon/templates/index.html`.
 
 To re-enable:
 

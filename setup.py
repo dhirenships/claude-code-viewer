@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Setup script for cocoview."""
+"""Setup script for cocomon."""
 
 from setuptools import setup, find_packages
 import os
@@ -13,7 +13,7 @@ def read_readme():
     return "Local command center for Claude Code sessions"
 
 setup(
-    name="cocoview",
+    name="cocomon",
     version="0.1.0",
     description="Local command center for Claude Code sessions",
     long_description=read_readme(),
@@ -23,7 +23,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     package_data={
-        'claude_viewer': [
+        'cocomon': [
             'static/css/*.css',
             'static/js/*.js',
             'templates/*.html'
@@ -31,8 +31,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'cocoview=claude_viewer.cli:main',
-            'claude-viewer=claude_viewer.cli:main',
+            'cocomon=cocomon.cli:main',
+            'cocoview=cocomon.cli:main',
         ],
     },
     install_requires=[
@@ -64,7 +64,7 @@ setup(
         "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
         "Environment :: Web Environment",
     ],
-    keywords="claude claude-code ai conversation control console web local-first cocoview",
+    keywords="claude claude-code ai conversation monitor control console web local-first cocomon",
     project_urls={
         "Bug Reports": "https://github.com/gdagitrep/claude-code-viewer/issues",
         "Source": "https://github.com/gdagitrep/claude-code-viewer",
