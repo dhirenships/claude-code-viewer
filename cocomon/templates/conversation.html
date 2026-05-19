@@ -32,6 +32,9 @@
     data-session="{{ session_id }}"
     data-file-revision="{{ conversation.file_revision or '' }}"
     data-target-line="{{ target_line or '' }}"
+    data-current-page="{{ conversation.page }}"
+    data-total-pages="{{ conversation.total_pages }}"
+    data-per-page="{{ conversation.per_page }}"
 >
 {% if share_url %}
 <a
@@ -70,15 +73,6 @@
                 >
             </div>
 
-            <div class="filter-group">
-                <label for="per_page">Messages per Page</label>
-                <select id="per_page" name="per_page" class="filter-select auto-filter">
-                    <option value="25">25</option>
-                    <option value="50" {{ 'selected' if conversation.per_page == 50 else '' }}>50</option>
-                    <option value="100" {{ 'selected' if conversation.per_page == 100 else '' }}>100</option>
-                </select>
-            </div>
-
             <div class="filter-actions">
                 <button type="submit" class="search-btn" title="Search">
                     <i class="bi bi-search me-1"></i>
@@ -98,7 +92,7 @@
                 <strong>{{ conversation.metadata.session_name }}</strong>
                 <span class="summary-divider">/</span>
             {% endif %}
-            Showing {{ conversation.messages|length }} of {{ conversation.total }} user/claude messages
+            <span class="loaded-count">{{ conversation.messages|length }}</span> of {{ conversation.total }} messages
         </span>
         {% if search %}
             <span>
@@ -157,6 +151,12 @@
     <span class="session-send-status" data-session-send-status></span>
 </form>
 
+<!-- Top loader for infinite scroll -->
+<div class="infinite-scroll-loader top-loader" style="display:none">
+    <div class="spinner"></div>
+    <span>Loading older messages...</span>
+</div>
+
 <!-- Messages -->
 {% if conversation.messages %}
     <div class="messages-container terminal-transcript">
@@ -198,88 +198,6 @@
                 Clear Filters
             </button>
         {% endif %}
-    </div>
-{% endif %}
-
-<!-- Pagination -->
-{% if conversation.total_pages > 1 %}
-    <div class="pagination-container">
-        <div class="pagination-info">
-            Page {{ conversation.page }} of {{ conversation.total_pages }}
-            ({{ conversation.total }} total messages)
-        </div>
-
-        <nav aria-label="Conversation pagination">
-            <ul class="pagination mb-0">
-                <!-- Previous page -->
-                {% if conversation.page > 1 %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ conversation.page - 1 }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">
-                            <i class="bi bi-chevron-left"></i>
-                        </a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled">
-                        <span class="page-link">
-                            <i class="bi bi-chevron-left"></i>
-                        </span>
-                    </li>
-                {% endif %}
-
-                <!-- Page numbers -->
-                {% set start_page = [1, conversation.page - 2]|max %}
-                {% set end_page = [conversation.total_pages, conversation.page + 2]|min %}
-
-                {% if start_page > 1 %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page=1{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">1</a>
-                    </li>
-                    {% if start_page > 2 %}
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                    {% endif %}
-                {% endif %}
-
-                {% for page_num in range(start_page, end_page + 1) %}
-                    {% if page_num == conversation.page %}
-                        <li class="page-item active">
-                            <span class="page-link">{{ page_num }}</span>
-                        </li>
-                    {% else %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_num }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">{{ page_num }}</a>
-                        </li>
-                    {% endif %}
-                {% endfor %}
-
-                {% if end_page < conversation.total_pages %}
-                    {% if end_page < conversation.total_pages - 1 %}
-                        <li class="page-item disabled">
-                            <span class="page-link">...</span>
-                        </li>
-                    {% endif %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ conversation.total_pages }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">{{ conversation.total_pages }}</a>
-                    </li>
-                {% endif %}
-
-                <!-- Next page -->
-                {% if conversation.page < conversation.total_pages %}
-                    <li class="page-item">
-                        <a class="page-link" href="?page={{ conversation.page + 1 }}{% if embedded %}&embedded=true{% endif %}{% if search %}&search={{ search }}{% endif %}{% if highlight %}&highlight={{ highlight }}{% endif %}{% if show_tools %}&show_tools=true{% endif %}{% if conversation.per_page != 50 %}&per_page={{ conversation.per_page }}{% endif %}">
-                            <i class="bi bi-chevron-right"></i>
-                        </a>
-                    </li>
-                {% else %}
-                    <li class="page-item disabled">
-                        <span class="page-link">
-                            <i class="bi bi-chevron-right"></i>
-                        </span>
-                    </li>
-                {% endif %}
-            </ul>
-        </nav>
     </div>
 {% endif %}
 </div>

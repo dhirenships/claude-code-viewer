@@ -1065,8 +1065,7 @@ main.container:has(.sessions-page) {
 }
 
 .dark-theme .message,
-.dark-theme .search-filters,
-.dark-theme .pagination-container {
+.dark-theme .search-filters {
     background-color: var(--surface-bg);
     border-color: var(--border-color);
 }
@@ -1437,34 +1436,20 @@ code {
 }
 
 /* Pagination */
-.pagination-container {
+.infinite-scroll-loader {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
-    margin: 0.75rem 0;
-    padding: 0.5rem 0.75rem;
-    background: var(--surface-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 0.35rem;
-}
-
-.pagination-info {
+    gap: 0.5rem;
+    padding: 0.75rem;
     color: var(--muted-color);
-    font-size: 0.75rem;
+    font-size: 0.8rem;
 }
 
-.pagination {
-    margin: 0;
-}
-
-.pagination .page-link {
-    color: var(--primary-color);
-    border-color: var(--border-color);
-}
-
-.pagination .page-item.active .page-link {
-    background-color: var(--primary-color);
-    border-color: var(--primary-color);
+.infinite-scroll-loader .spinner {
+    width: 16px;
+    height: 16px;
+    border-width: 2px;
 }
 
 /* Mobile sidebar drawer infrastructure */
@@ -1846,11 +1831,6 @@ code {
 
     .conversation-recap {
         display: none;
-    }
-
-    .pagination-container {
-        flex-direction: column;
-        gap: 1rem;
     }
 
     .session-stats {

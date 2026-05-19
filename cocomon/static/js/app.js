@@ -22,6 +22,7 @@ class ClaudeViewer {
         this.setupSearch();
         this.setupSidebar();
         this.setupConversationScroll();
+        this.setupInfiniteScroll();
         this.setupSessionShare();
         this.setupLiveClaude();
         this.setupActivityPolling();
@@ -597,6 +598,11 @@ class ClaudeViewer {
         const conversationView = document.querySelector('.conversation-view');
         if (!conversationView) return;
 
+        if (this._inf) {
+            await this._refreshInfiniteScroll(options);
+            return;
+        }
+
         const wasNearBottom = this.isNearPageBottom();
         const previousScrollY = window.scrollY;
         const previousHeight = document.documentElement.scrollHeight;
@@ -613,7 +619,7 @@ class ClaudeViewer {
 
         conversationView.replaceWith(nextConversationView);
         this.setupCodeCopyButtons();
-        this.setupPagination();
+        this.setupInfiniteScroll();
         this.setupSessionShare();
         this.restoreConversationScroll({
             preserveScroll: options.preserveScroll !== false,
@@ -621,6 +627,67 @@ class ClaudeViewer {
             previousScrollY,
             previousHeight,
         });
+    }
+
+    async _refreshInfiniteScroll(options = {}) {
+        const container = document.querySelector('.messages-container');
+        if (!container) return;
+
+        const wasNearBottom = this.isNearPageBottom();
+
+        const url = new URL(window.location.href);
+        url.searchParams.delete('page');
+        url.searchParams.set('per_page', this._inf.perPage);
+        url.searchParams.set('_refresh', String(Date.now()));
+
+        const response = await fetch(url.toString(), { cache: 'no-store' });
+        if (!response.ok) return;
+
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const newView = doc.querySelector('.conversation-view');
+        if (!newView) return;
+
+        const newTotalPages = parseInt(newView.dataset.totalPages) || this._inf.totalPages;
+        this._inf.totalPages = newTotalPages;
+
+        const conversationView = document.querySelector('.conversation-view');
+        if (newView.dataset.fileRevision) {
+            conversationView.dataset.fileRevision = newView.dataset.fileRevision;
+            conversationView.dataset.totalPages = newTotalPages;
+        }
+
+        const fetchedMessages = doc.querySelectorAll('.messages-container .terminal-turn');
+        let appended = 0;
+        fetchedMessages.forEach(msg => {
+            if (!container.querySelector(`#${CSS.escape(msg.id)}`)) {
+                container.appendChild(msg.cloneNode(true));
+                appended++;
+            }
+        });
+
+        if (appended > 0) {
+            this._inf.pageMax = newTotalPages;
+            this.setupCodeCopyButtons();
+            this._updateLoadedCount();
+
+            if (wasNearBottom) {
+                requestAnimationFrame(() => {
+                    const scrollEl = document.scrollingElement || document.documentElement;
+                    scrollEl.scrollTop = scrollEl.scrollHeight;
+                });
+            }
+        }
+
+        const newSendForm = doc.querySelector('.session-send-form');
+        const currentSendForm = document.querySelector('.session-send-form');
+        if (newSendForm && currentSendForm) {
+            const wasLive = currentSendForm.dataset.live;
+            const nowLive = newSendForm.dataset.live;
+            if (wasLive !== nowLive) {
+                currentSendForm.replaceWith(newSendForm.cloneNode(true));
+            }
+        }
     }
 
     setupSessionShare() {
@@ -1145,32 +1212,110 @@ class ClaudeViewer {
         }
     }
 
-    // Initialize pagination
-    setupPagination() {
-        const paginationLinks = document.querySelectorAll('.pagination .page-link');
-        paginationLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const url = new URL(link.href);
-                this.loadPage(url.searchParams.get('page'));
+    setupInfiniteScroll() {
+        const view = document.querySelector('.conversation-view');
+        if (!view) return;
+
+        const container = document.querySelector('.messages-container');
+        if (!container) return;
+
+        const currentPage = parseInt(view.dataset.currentPage) || 1;
+        const totalPages = parseInt(view.dataset.totalPages) || 1;
+        const perPage = parseInt(view.dataset.perPage) || 50;
+
+        this._inf = {
+            pageMin: currentPage,
+            pageMax: currentPage,
+            totalPages,
+            perPage,
+            loading: false,
+            cooldown: false,
+        };
+
+        this._updateTopLoader();
+
+        let ticking = false;
+        const attachScrollListener = () => {
+            window.addEventListener('scroll', () => {
+                if (ticking) return;
+                ticking = true;
+                requestAnimationFrame(() => {
+                    ticking = false;
+                    if (!this._inf.loading && !this._inf.cooldown &&
+                        window.scrollY < 300 && this._inf.pageMin > 1) {
+                        this._loadOlderPage();
+                    }
+                });
             });
-        });
+        };
+        setTimeout(attachScrollListener, 1000);
     }
 
-    loadPage(pageNumber) {
-        const url = new URL(window.location);
-        url.searchParams.set('page', pageNumber);
-        window.location.href = url.toString();
+    async _loadOlderPage() {
+        const inf = this._inf;
+        if (!inf || inf.loading || inf.cooldown || inf.pageMin <= 1) return;
+
+        inf.loading = true;
+        const targetPage = inf.pageMin - 1;
+        const loader = document.querySelector('.infinite-scroll-loader.top-loader');
+        if (loader) loader.style.display = '';
+
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', targetPage);
+            url.searchParams.set('per_page', inf.perPage);
+            url.searchParams.delete('_refresh');
+
+            const response = await fetch(url.toString(), { cache: 'no-store' });
+            if (!response.ok) return;
+
+            const html = await response.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const newMessages = doc.querySelectorAll('.messages-container .terminal-turn');
+            if (newMessages.length === 0) return;
+
+            const container = document.querySelector('.messages-container');
+            if (!container) return;
+
+            const firstOldMsg = container.querySelector('.terminal-turn');
+
+            const frag = document.createDocumentFragment();
+            newMessages.forEach(msg => frag.appendChild(msg.cloneNode(true)));
+            container.prepend(frag);
+
+            if (firstOldMsg) {
+                firstOldMsg.scrollIntoView({ block: 'start', behavior: 'instant' });
+            }
+
+            inf.pageMin = targetPage;
+            this.setupCodeCopyButtons();
+            this._updateLoadedCount();
+        } finally {
+            inf.loading = false;
+            if (loader) loader.classList.remove('active');
+            this._updateTopLoader();
+            inf.cooldown = true;
+            setTimeout(() => { inf.cooldown = false; }, 800);
+        }
+    }
+
+    _updateTopLoader() {
+        const loader = document.querySelector('.infinite-scroll-loader.top-loader');
+        if (!loader || !this._inf) return;
+        loader.style.display = this._inf.pageMin > 1 ? '' : 'none';
+    }
+
+    _updateLoadedCount() {
+        const el = document.querySelector('.loaded-count');
+        if (!el) return;
+        const count = document.querySelectorAll('.messages-container .terminal-turn').length;
+        el.textContent = count;
     }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize the main app
     window.claudeViewer = new ClaudeViewer();
-    
-    // Setup pagination if present
-    window.claudeViewer.setupPagination();
 });
 
 // Utility functions for templates
