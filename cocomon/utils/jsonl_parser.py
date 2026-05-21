@@ -105,16 +105,18 @@ class JSONLParser:
         file_stats = os.stat(session_path)
         
         messages = []
+        include_searchable_tools = include_tools or bool(search)
+
         with open(session_path, 'r', encoding='utf-8') as f:
             for line_num, line in enumerate(f, 1):
                 try:
                     data = json.loads(line.strip())
                     
                     # Parse different message types
-                    parsed_message = self._parse_message(data, line_num, include_tools)
+                    parsed_message = self._parse_message(data, line_num, include_searchable_tools)
                     
                     # Apply filters
-                    if self._should_include_message(parsed_message, search, message_type, include_tools):
+                    if self._should_include_message(parsed_message, search, message_type, include_searchable_tools):
                         messages.append(parsed_message)
                         
                 except json.JSONDecodeError:
@@ -156,7 +158,7 @@ class JSONLParser:
         limit: int = 100,
         filters: Optional[Dict[str, Any]] = None
     ) -> Dict:
-        """Search user and assistant messages across every session."""
+        """Search message text, tool calls, and tool output across every session."""
         search = (search or "").strip()
         if not search:
             return {"results": [], "total": 0, "limit": limit}
@@ -170,11 +172,6 @@ class JSONLParser:
 
         for entry in entries:
             if search_text not in entry["search_text"]:
-                continue
-
-            if entry.get("is_tool_only") and not (
-                filters.get("has_tools") or filters.get("has_file_edits")
-            ):
                 continue
 
             if not self._entry_matches_filters(entry, filters):
@@ -196,6 +193,9 @@ class JSONLParser:
                 "role": entry["role"],
                 "timestamp": entry["timestamp"],
                 "snippet": self._make_search_snippet(entry["content"], search),
+                "has_tools": entry["has_tools"],
+                "is_tool_only": entry["is_tool_only"],
+                "has_file_edits": entry["has_file_edits"],
             })
 
         return {

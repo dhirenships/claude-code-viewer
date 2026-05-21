@@ -1000,9 +1000,14 @@ def _filter_projects_to_matching_sessions(
         return []
 
     first_match_lines = {}
+    first_match_show_tools = {}
     for result in search_results.get("results", []):
         key = (result["project_name"], result["session_id"])
         first_match_lines.setdefault(key, result["line_number"])
+        first_match_show_tools.setdefault(
+            key,
+            bool(result.get("has_tools") or result.get("has_file_edits") or result.get("is_tool_only")),
+        )
 
     filtered_projects = []
     for project in projects:
@@ -1015,6 +1020,7 @@ def _filter_projects_to_matching_sessions(
             session_entry = {**session}
             if key in first_match_lines:
                 session_entry["search_line"] = first_match_lines[key]
+                session_entry["search_show_tools"] = first_match_show_tools.get(key, False)
             sessions.append(session_entry)
 
         if not sessions:

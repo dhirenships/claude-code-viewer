@@ -8,6 +8,7 @@
 {% set selected_project = request.query_params.get('project') or (first_search_result.project_name if first_search_result else '') %}
 {% set selected_session = request.query_params.get('session') or (first_search_result.session_id if first_search_result else '') %}
 {% set selected_line = request.query_params.get('line') or (first_search_result.line_number if first_search_result else '') %}
+{% set selected_show_tools = first_search_result and (first_search_result.has_tools or first_search_result.has_file_edits or first_search_result.is_tool_only) %}
 {% set initial_project = selected_project or (recent_sessions[0].project_name if recent_sessions else '') %}
 {% set initial_session = selected_session or (recent_sessions[0].id if recent_sessions else '') %}
 
@@ -26,7 +27,7 @@
                     name="q"
                     class="global-search-input"
                     type="search"
-                    placeholder="Search every user and claude message..."
+                    placeholder="Search messages, tools, commands, and output..."
                     value="{{ global_search or '' }}"
                 >
                 <button type="submit" class="search-btn" title="Search">
@@ -48,7 +49,7 @@
                     {% endfor %}
                 </select>
                 <select name="role" aria-label="Role filter">
-                    <option value="">User + Claude</option>
+                    <option value="">All roles</option>
                     <option value="user" {{ 'selected' if search_filters.role == 'user' else '' }}>User only</option>
                     <option value="assistant" {{ 'selected' if search_filters.role == 'assistant' else '' }}>Claude only</option>
                 </select>
@@ -123,7 +124,7 @@
                     {% for result in global_search_results.results %}
                         <a
                             class="global-result"
-                            href="/conversation/{{ result.project_name }}/{{ result.session_id }}?embedded=true&highlight={{ global_search | urlencode }}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}&line={{ result.line_number }}#message-line-{{ result.line_number }}"
+                            href="/conversation/{{ result.project_name }}/{{ result.session_id }}?embedded=true&highlight={{ global_search | urlencode }}{% if result.has_tools or result.has_file_edits or result.is_tool_only %}&show_tools=true{% endif %}&line={{ result.line_number }}#message-line-{{ result.line_number }}"
                             target="conversation-frame"
                             data-project="{{ result.project_name }}"
                             data-session="{{ result.session_id }}"
@@ -149,7 +150,7 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <div class="global-no-results">No user or claude messages matched.</div>
+                <div class="global-no-results">No messages matched.</div>
             {% endif %}
         </div>
     {% endif %}
@@ -210,7 +211,7 @@
                             {% set is_last_active_day = session.modified[:10] == latest_day %}
                             <a
                                 class="session-link {{ '' if is_last_active_day else 'session-extra d-none' }} {{ 'active' if session.id == initial_session and project.name == initial_project else '' }}"
-                                href="/conversation/{{ project.name }}/{{ session.id }}?embedded=true{% if global_search and session.search_line %}&highlight={{ global_search | urlencode }}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}&line={{ session.search_line }}#message-line-{{ session.search_line }}{% endif %}"
+                                href="/conversation/{{ project.name }}/{{ session.id }}?embedded=true{% if global_search and session.search_line %}&highlight={{ global_search | urlencode }}{% if session.search_show_tools %}&show_tools=true{% endif %}&line={{ session.search_line }}#message-line-{{ session.search_line }}{% endif %}"
                                 target="conversation-frame"
                                 data-project="{{ project.name }}"
                                 data-session="{{ session.id }}"
@@ -272,7 +273,7 @@
                     class="conversation-frame"
                     name="conversation-frame"
                     title="Conversation viewer"
-                    src="/conversation/{{ initial_project }}/{{ initial_session }}?embedded=true{% if global_search and selected_project and selected_session %}&highlight={{ global_search | urlencode }}{% if search_filters.has_tools or search_filters.has_file_edits %}&show_tools=true{% endif %}{% if selected_line %}&line={{ selected_line }}#message-line-{{ selected_line }}{% endif %}{% endif %}"
+                    src="/conversation/{{ initial_project }}/{{ initial_session }}?embedded=true{% if global_search and selected_project and selected_session %}&highlight={{ global_search | urlencode }}{% if selected_show_tools %}&show_tools=true{% endif %}{% if selected_line %}&line={{ selected_line }}#message-line-{{ selected_line }}{% endif %}{% endif %}"
                 ></iframe>
             {% else %}
                 <div class="conversation-empty-state">
