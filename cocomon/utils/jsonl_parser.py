@@ -14,6 +14,7 @@ class JSONLParser:
         self._session_registry = None
         self._search_index_signature = None
         self._search_index = []
+        self._search_file_index = {}
     
     def get_projects(self) -> List[Dict]:
         """Scan and return all Claude Code projects"""
@@ -171,10 +172,10 @@ class JSONLParser:
         session_match_count = {}
 
         for entry in entries:
-            if search_text not in entry["search_text"]:
+            if not self._entry_matches_filters(entry, filters):
                 continue
 
-            if not self._entry_matches_filters(entry, filters):
+            if search_text not in entry["search_text"]:
                 continue
 
             session_key = (entry["project_name"], entry["session_id"])
@@ -218,7 +219,7 @@ class JSONLParser:
         if signature == self._search_index_signature:
             return self._search_index
 
-        self._search_index = self._build_search_index()
+        self._search_index = self._build_search_index(signature)
         self._search_index_signature = signature
         return self._search_index
 
@@ -241,61 +242,83 @@ class JSONLParser:
 
         return tuple(sorted(files))
 
-    def _build_search_index(self) -> List[Dict]:
-        projects = self.get_projects_with_sessions()
+    def _build_search_index(self, signature: Optional[Tuple] = None) -> List[Dict]:
+        signature = signature if signature is not None else self._get_search_index_signature()
         entries = []
+        current_paths = {path for path, _, _ in signature}
 
-        for project in projects:
-            for session in project["sessions"]:
-                session_path = os.path.join(
-                    self.claude_projects_path,
-                    project["name"],
-                    f"{session['id']}.jsonl",
+        for cached_path in list(self._search_file_index):
+            if cached_path not in current_paths:
+                del self._search_file_index[cached_path]
+
+        for session_path, mtime_ns, size in signature:
+            file_signature = (mtime_ns, size)
+            cached = self._search_file_index.get(session_path)
+            if cached and cached.get("signature") == file_signature:
+                file_entries = cached["entries"]
+            else:
+                file_entries = self._build_search_entries_for_file(
+                    session_path,
+                    mtime_ns,
                 )
-
-                if not os.path.exists(session_path):
-                    continue
-
-                with open(session_path, 'r', encoding='utf-8') as f:
-                    for line_num, line in enumerate(f, 1):
-                        try:
-                            data = json.loads(line.strip())
-                        except json.JSONDecodeError:
-                            continue
-
-                        message = self._parse_message(data, line_num, include_tools=True)
-                        if not self._should_include_message(message, None, None, include_tools=True):
-                            continue
-
-                        content = str(message.get("content", ""))
-                        role = message.get("role", "")
-                        tool_names = message.get("tool_names", [])
-                        entries.append({
-                            "project_name": project["name"],
-                            "project_display_name": project["display_name"],
-                            "session_id": session["id"],
-                            "session_modified": session["modified"],
-                            "line_number": line_num,
-                            "role": role,
-                            "timestamp": message.get("timestamp"),
-                            "content": content,
-                            "search_text": content.lower(),
-                            "message_date": self._message_date(message, session["modified"]),
-                            "has_code": bool(message.get("has_code")),
-                            "has_tools": bool(message.get("has_tool_activity")),
-                            "is_tool_only": bool(message.get("is_tool_only")),
-                            "has_file_edits": any(
-                                name in {"Write", "Edit", "MultiEdit", "NotebookEdit"}
-                                for name in tool_names
-                            ),
-                            "has_errors": self._message_has_error(message),
-                        })
+                self._search_file_index[session_path] = {
+                    "signature": file_signature,
+                    "entries": file_entries,
+                }
+            entries.extend(file_entries)
 
         return sorted(
             entries,
             key=lambda entry: entry.get("timestamp") or entry["session_modified"],
             reverse=True,
         )
+
+    def _build_search_entries_for_file(self, session_path: str, mtime_ns: int) -> List[Dict]:
+        project_name = os.path.basename(os.path.dirname(session_path))
+        project_display_name = self._format_project_name(project_name)
+        session_id = os.path.splitext(os.path.basename(session_path))[0]
+        session_modified = datetime.fromtimestamp(mtime_ns / 1_000_000_000).isoformat()
+        entries = []
+
+        if not os.path.exists(session_path):
+            return entries
+
+        with open(session_path, 'r', encoding='utf-8') as f:
+            for line_num, line in enumerate(f, 1):
+                try:
+                    data = json.loads(line.strip())
+                except json.JSONDecodeError:
+                    continue
+
+                message = self._parse_message(data, line_num, include_tools=True)
+                if not self._should_include_message(message, None, None, include_tools=True):
+                    continue
+
+                content = str(message.get("content", ""))
+                role = message.get("role", "")
+                tool_names = message.get("tool_names", [])
+                entries.append({
+                    "project_name": project_name,
+                    "project_display_name": project_display_name,
+                    "session_id": session_id,
+                    "session_modified": session_modified,
+                    "line_number": line_num,
+                    "role": role,
+                    "timestamp": message.get("timestamp"),
+                    "content": content,
+                    "search_text": content.lower(),
+                    "message_date": self._message_date(message, session_modified),
+                    "has_code": bool(message.get("has_code")),
+                    "has_tools": bool(message.get("has_tool_activity")),
+                    "is_tool_only": bool(message.get("is_tool_only")),
+                    "has_file_edits": any(
+                        name in {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+                        for name in tool_names
+                    ),
+                    "has_errors": self._message_has_error(message),
+                })
+
+        return entries
 
     def _entry_matches_filters(self, entry: Dict, filters: Dict[str, Any]) -> bool:
         project = filters.get("project")

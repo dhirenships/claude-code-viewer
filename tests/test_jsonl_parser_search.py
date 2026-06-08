@@ -95,6 +95,63 @@ class JSONLParserSearchTests(unittest.TestCase):
             self.assertEqual(conversation["messages"][0]["line_number"], 1)
             self.assertIn("Tool Used: Bash", conversation["messages"][0]["content"])
 
+    def test_search_index_reuses_unchanged_session_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project_dir = Path(tmp) / "project"
+            project_dir.mkdir()
+            first_session = project_dir / "session-1.jsonl"
+            second_session = project_dir / "session-2.jsonl"
+            self._write_jsonl(
+                first_session,
+                [
+                    {
+                        "type": "user",
+                        "timestamp": "2026-05-21T10:00:00Z",
+                        "message": {"role": "user", "content": "stable needle"},
+                    }
+                ],
+            )
+            self._write_jsonl(
+                second_session,
+                [
+                    {
+                        "type": "user",
+                        "timestamp": "2026-05-21T10:00:01Z",
+                        "message": {"role": "user", "content": "changing haystack"},
+                    }
+                ],
+            )
+
+            parser = JSONLParser(str(tmp))
+            original_build = parser._build_search_entries_for_file
+            built_paths = []
+
+            def tracking_build(path, mtime_ns):
+                built_paths.append(Path(path).name)
+                return original_build(path, mtime_ns)
+
+            parser._build_search_entries_for_file = tracking_build
+
+            parser.search_messages("needle")
+            self.assertEqual(sorted(built_paths), ["session-1.jsonl", "session-2.jsonl"])
+
+            built_paths.clear()
+            self._write_jsonl(
+                second_session,
+                [
+                    {
+                        "type": "user",
+                        "timestamp": "2026-05-21T10:00:01Z",
+                        "message": {"role": "user", "content": "changing needle"},
+                    }
+                ],
+            )
+
+            results = parser.search_messages("needle")
+
+            self.assertEqual(built_paths, ["session-2.jsonl"])
+            self.assertEqual(results["total"], 2)
+
     def _write_jsonl(self, path, rows):
         with path.open("w", encoding="utf-8") as f:
             for row in rows:
