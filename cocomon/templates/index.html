@@ -209,43 +209,55 @@
                     <div class="session-links">
                         {% for session in project.sessions %}
                             {% set is_last_active_day = session.modified[:10] == latest_day %}
-                            <a
-                                class="session-link {{ '' if is_last_active_day else 'session-extra d-none' }} {{ 'active' if session.id == initial_session and project.name == initial_project else '' }}"
-                                href="/conversation/{{ project.name }}/{{ session.id }}?embedded=true{% if global_search and session.search_line %}&highlight={{ global_search | urlencode }}{% if session.search_show_tools %}&show_tools=true{% endif %}&line={{ session.search_line }}#message-line-{{ session.search_line }}{% endif %}"
-                                target="conversation-frame"
-                                data-project="{{ project.name }}"
-                                data-session="{{ session.id }}"
-                                {% if global_search and session.search_line %}
-                                    data-line="{{ session.search_line }}"
-                                    data-search-result-session
-                                {% endif %}
-                            >
-                                <span class="session-link-title">
-                                    <i class="bi bi-chat-text"></i>
-                                    {% if session.live_terminal and session.live_terminal.live %}
-                                        <span
-                                            class="session-live-dot {{ 'is-busy' if session.live_terminal.status == 'busy' else '' }}"
-                                            title="{{ session.live_terminal.transport }}{% if session.live_terminal.tty %} / {{ session.live_terminal.tty.replace('/dev/', '') }}{% endif %}{% if session.live_terminal.pid %} / pid {{ session.live_terminal.pid }}{% endif %}{% if session.live_terminal.title %} / {{ session.live_terminal.title }}{% endif %}{% if session.live_terminal.status %} / {{ session.live_terminal.status }}{% endif %}"
-                                            aria-label="Live in {{ session.live_terminal.transport }}"
-                                        ></span>
-                                        {% if session.live_terminal.status == 'busy' %}
-                                            <span class="session-processing-label">processing</span>
-                                        {% endif %}
+                            <div class="session-link-shell {{ '' if is_last_active_day else 'session-extra d-none' }}">
+                                <a
+                                    class="session-link {{ 'active' if session.id == initial_session and project.name == initial_project else '' }}"
+                                    href="/conversation/{{ project.name }}/{{ session.id }}?embedded=true{% if global_search and session.search_line %}&highlight={{ global_search | urlencode }}{% if session.search_show_tools %}&show_tools=true{% endif %}&line={{ session.search_line }}#message-line-{{ session.search_line }}{% endif %}"
+                                    target="conversation-frame"
+                                    data-project="{{ project.name }}"
+                                    data-session="{{ session.id }}"
+                                    {% if global_search and session.search_line %}
+                                        data-line="{{ session.search_line }}"
+                                        data-search-result-session
                                     {% endif %}
-                                    {{ session.session_name or ('Session ' ~ session.id[:8] ~ '...') }}
-                                </span>
-                                {% if session.session_recap %}
-                                    <span class="session-link-recap">{{ session.session_recap }}</span>
-                                {% endif %}
-                                <span class="session-link-meta">
-                                    <span>{{ session.message_count }} messages</span>
-                                    <span>
-                                        <script>
-                                            document.write(window.formatRelativeTime("{{ session.modified }}"));
-                                        </script>
+                                >
+                                    <span class="session-link-title">
+                                        <i class="bi bi-chat-text"></i>
+                                        {% if session.live_terminal and session.live_terminal.live %}
+                                            <span
+                                                class="session-live-dot {{ 'is-busy' if session.live_terminal.status == 'busy' else '' }}"
+                                                title="{{ session.live_terminal.transport }}{% if session.live_terminal.tty %} / {{ session.live_terminal.tty.replace('/dev/', '') }}{% endif %}{% if session.live_terminal.pid %} / pid {{ session.live_terminal.pid }}{% endif %}{% if session.live_terminal.title %} / {{ session.live_terminal.title }}{% endif %}{% if session.live_terminal.status %} / {{ session.live_terminal.status }}{% endif %}"
+                                                aria-label="Live in {{ session.live_terminal.transport }}"
+                                            ></span>
+                                            {% if session.live_terminal.status == 'busy' %}
+                                                <span class="session-processing-label">processing</span>
+                                            {% endif %}
+                                        {% endif %}
+                                        <span class="session-link-name">{{ session.session_name or ('Session ' ~ session.id[:8] ~ '...') }}</span>
                                     </span>
-                                </span>
-                            </a>
+                                    {% if session.session_recap %}
+                                        <span class="session-link-recap">{{ session.session_recap }}</span>
+                                    {% endif %}
+                                    <span class="session-link-meta">
+                                        <span>{{ session.message_count }} messages</span>
+                                        <span>
+                                            <script>
+                                                document.write(window.formatRelativeTime("{{ session.modified }}"));
+                                            </script>
+                                        </span>
+                                    </span>
+                                </a>
+                                <button
+                                    type="button"
+                                    class="session-id-copy"
+                                    data-session-id-copy="{{ session.id }}"
+                                    aria-label="Copy session id {{ session.id }}"
+                                    title="Copy full session id"
+                                >
+                                    <i class="bi bi-copy"></i>
+                                    <span>{{ session.id[:8] }}</span>
+                                </button>
+                            </div>
                         {% endfor %}
                         {% if project.sessions|length > 0 %}
                             <button type="button" class="show-more-sessions" data-session-reveal>

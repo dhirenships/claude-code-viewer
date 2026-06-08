@@ -97,6 +97,13 @@ class ClaudeViewer {
             link.addEventListener('click', (event) => this.handleSessionClick(event, link));
         });
 
+        const sessionIdCopyButtons = root.querySelectorAll('[data-session-id-copy]');
+        sessionIdCopyButtons.forEach(button => {
+            if (button.dataset.copyBound === 'true') return;
+            button.dataset.copyBound = 'true';
+            button.addEventListener('click', (event) => this.handleSessionIdCopy(event, button));
+        });
+
         const projectToggles = root.querySelectorAll('[data-project-toggle]');
         projectToggles.forEach(toggle => {
             toggle.addEventListener('click', () => this.toggleProject(toggle));
@@ -113,6 +120,7 @@ class ClaudeViewer {
         sessionLinks.forEach(link => link.classList.remove('active'));
         activeLink.classList.add('active');
         activeLink.classList.remove('d-none');
+        activeLink.closest('.session-link-shell')?.classList.remove('d-none');
 
         const group = activeLink.closest('[data-project-group]');
         if (group) {
@@ -254,6 +262,51 @@ class ClaudeViewer {
         const hiddenCount = group.querySelectorAll('.session-extra.d-none').length;
         button.hidden = hiddenCount === 0;
         button.textContent = hiddenCount > 4 ? 'Show 4 more' : `Show ${hiddenCount} more`;
+    }
+
+    handleSessionIdCopy(event, button) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const sessionId = button.dataset.sessionIdCopy;
+        if (!sessionId) return;
+
+        this.copyText(sessionId).then(() => {
+            this.showSessionIdCopyFeedback(button);
+        });
+    }
+
+    copyText(text) {
+        if (navigator.clipboard) {
+            return navigator.clipboard.writeText(text);
+        }
+
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.setAttribute('readonly', '');
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        return Promise.resolve();
+    }
+
+    showSessionIdCopyFeedback(button) {
+        const label = button.querySelector('span');
+        const originalText = label?.textContent || '';
+        const originalTitle = button.getAttribute('title') || '';
+
+        button.classList.add('copied');
+        button.setAttribute('title', 'Copied session id');
+        if (label) label.textContent = 'Copied';
+
+        setTimeout(() => {
+            button.classList.remove('copied');
+            button.setAttribute('title', originalTitle);
+            if (label) label.textContent = originalText;
+        }, 1400);
     }
 
     setupCodeCopyButtons() {

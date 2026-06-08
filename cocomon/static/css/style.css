@@ -549,9 +549,14 @@ main.container:has(.sessions-page) {
     display: none;
 }
 
+.session-link-shell {
+    position: relative;
+}
+
 .session-link {
     display: block;
-    padding: 0.45rem 0.5rem;
+    min-width: 0;
+    padding: 0.45rem 4.75rem 0.45rem 0.5rem;
     border-radius: 0.35rem;
     color: var(--text-color);
     text-decoration: none;
@@ -587,9 +592,57 @@ main.container:has(.sessions-page) {
 
 .session-link-title {
     gap: 0.35rem;
+    min-width: 0;
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--heading-color);
+}
+
+.session-link-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.session-id-copy {
+    position: absolute;
+    top: 0.36rem;
+    right: 0.45rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    max-width: 4rem;
+    height: 1.25rem;
+    padding: 0 0.3rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.28rem;
+    background: var(--surface-bg);
+    color: var(--muted-color);
+    cursor: pointer;
+    font-size: 0.64rem;
+    line-height: 1;
+}
+
+.session-id-copy:hover,
+.session-id-copy:focus {
+    border-color: rgba(37, 99, 235, 0.35);
+    background: var(--surface-muted);
+    color: var(--primary-color);
+    outline: none;
+}
+
+.session-id-copy.copied {
+    border-color: rgba(5, 150, 105, 0.35);
+    background: rgba(5, 150, 105, 0.1);
+    color: var(--success-color);
+}
+
+.session-id-copy span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .session-live-dot {
