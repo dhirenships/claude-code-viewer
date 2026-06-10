@@ -86,6 +86,13 @@ class ClaudeViewer {
             }
         });
 
+        document.addEventListener('click', (event) => {
+            const copyButton = event.target.closest?.('[data-session-id-copy]');
+            if (copyButton) {
+                this.handleSessionIdCopy(event, copyButton);
+            }
+        });
+
         this.bindSidebarControls(document);
 
         window.addEventListener('popstate', () => this.syncSessionFromUrl());
@@ -95,13 +102,6 @@ class ClaudeViewer {
         const sessionLinks = root.querySelectorAll('.session-link[target="conversation-frame"]');
         sessionLinks.forEach(link => {
             link.addEventListener('click', (event) => this.handleSessionClick(event, link));
-        });
-
-        const sessionIdCopyButtons = root.querySelectorAll('[data-session-id-copy]');
-        sessionIdCopyButtons.forEach(button => {
-            if (button.dataset.copyBound === 'true') return;
-            button.dataset.copyBound = 'true';
-            button.addEventListener('click', (event) => this.handleSessionIdCopy(event, button));
         });
 
         const projectToggles = root.querySelectorAll('[data-project-toggle]');
@@ -271,42 +271,64 @@ class ClaudeViewer {
         const sessionId = button.dataset.sessionIdCopy;
         if (!sessionId) return;
 
-        this.copyText(sessionId).then(() => {
-            this.showSessionIdCopyFeedback(button);
-        });
+        this.copyText(sessionId)
+            .then(() => this.showSessionIdCopyFeedback(button, 'Copied', 'Copied session id', 'copied'))
+            .catch(() => this.showSessionIdCopyFeedback(button, 'Failed', 'Copy failed', 'copy-failed'));
     }
 
-    copyText(text) {
-        if (navigator.clipboard) {
-            return navigator.clipboard.writeText(text);
+    async copyText(text) {
+        if (navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch (error) {
+                // Some browsers expose clipboard APIs over LAN HTTP but reject writes.
+            }
         }
 
+        this.copyTextWithSelection(text);
+    }
+
+    copyTextWithSelection(text) {
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.setAttribute('readonly', '');
         textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '0';
         textArea.style.opacity = '0';
         document.body.appendChild(textArea);
+        textArea.focus();
         textArea.select();
-        document.execCommand('copy');
+        textArea.setSelectionRange(0, textArea.value.length);
+        const copied = document.execCommand('copy');
         document.body.removeChild(textArea);
-        return Promise.resolve();
+
+        if (!copied) {
+            throw new Error('Copy command failed');
+        }
     }
 
-    showSessionIdCopyFeedback(button) {
+    showSessionIdCopyFeedback(button, labelText, titleText, stateClass) {
         const label = button.querySelector('span');
-        const originalText = label?.textContent || '';
-        const originalTitle = button.getAttribute('title') || '';
+        const originalText = button.dataset.originalCopyLabel || label?.textContent || '';
+        const originalTitle = button.dataset.originalCopyTitle || button.getAttribute('title') || '';
+        if (!button.dataset.originalCopyLabel) button.dataset.originalCopyLabel = originalText;
+        if (!button.dataset.originalCopyTitle) button.dataset.originalCopyTitle = originalTitle;
 
-        button.classList.add('copied');
-        button.setAttribute('title', 'Copied session id');
-        if (label) label.textContent = 'Copied';
+        window.clearTimeout(Number(button.dataset.copyResetTimer || 0));
 
-        setTimeout(() => {
-            button.classList.remove('copied');
+        button.classList.remove('copied', 'copy-failed');
+        button.classList.add(stateClass);
+        button.setAttribute('title', titleText);
+        if (label) label.textContent = labelText;
+
+        const timer = window.setTimeout(() => {
+            button.classList.remove(stateClass);
             button.setAttribute('title', originalTitle);
             if (label) label.textContent = originalText;
         }, 1400);
+        button.dataset.copyResetTimer = String(timer);
     }
 
     setupCodeCopyButtons() {

@@ -609,6 +609,7 @@ main.container:has(.sessions-page) {
     position: absolute;
     top: 0.36rem;
     right: 0.45rem;
+    z-index: 1;
     display: inline-flex;
     align-items: center;
     gap: 0.2rem;
@@ -636,6 +637,12 @@ main.container:has(.sessions-page) {
     border-color: rgba(5, 150, 105, 0.35);
     background: rgba(5, 150, 105, 0.1);
     color: var(--success-color);
+}
+
+.session-id-copy.copy-failed {
+    border-color: rgba(220, 38, 38, 0.35);
+    background: rgba(220, 38, 38, 0.1);
+    color: var(--danger-color);
 }
 
 .session-id-copy span {
@@ -807,6 +814,17 @@ main.container:has(.sessions-page) {
     column-gap: 0.35rem;
     align-items: start;
     margin: 0 0 0.95rem;
+}
+
+.terminal-turn.user {
+    margin-inline: -0.35rem;
+    padding: 0.35rem;
+    border-radius: 0.35rem;
+    background: rgba(100, 116, 139, 0.1);
+}
+
+.dark-theme .terminal-turn.user {
+    background: rgba(148, 163, 184, 0.12);
 }
 
 .terminal-turn.search-target,
@@ -1746,7 +1764,15 @@ code {
     /* Bigger touch targets */
     .session-link {
         min-height: 2.75rem;
-        padding: 0.55rem 0.6rem;
+        padding: 0.55rem 4.85rem 0.55rem 0.6rem;
+    }
+
+    .session-id-copy {
+        top: 0.52rem;
+        right: 0.55rem;
+        height: 1.65rem;
+        max-width: 4.25rem;
+        padding: 0 0.4rem;
     }
 
     .project-session-heading {
