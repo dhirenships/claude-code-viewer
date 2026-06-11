@@ -1092,8 +1092,7 @@ async def root(
         reverse=True,
     )
 
-    return templates.TemplateResponse("index.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "index.html", {
         "projects": projects,
         "filter_projects": all_projects,
         "recent_sessions": recent_sessions,
@@ -1184,8 +1183,7 @@ async def project_view(request: Request, project_name: str):
     if not sessions:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    return templates.TemplateResponse("project_view.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "project_view.html", {
         "project_name": project_name,
         "display_name": parser._format_project_name(project_name),
         "sessions": sessions
@@ -1228,8 +1226,7 @@ async def render_conversation_template(
             rendered_content = render_markdown_with_code(message["content"])
             message["rendered_content"] = highlight_rendered_search(rendered_content, highlight or search)
 
-    return templates.TemplateResponse("conversation.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "conversation.html", {
         "project_name": project_name,
         "session_id": session_id,
         "conversation": conversation,

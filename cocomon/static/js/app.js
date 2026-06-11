@@ -276,17 +276,19 @@ class ClaudeViewer {
             .catch(() => this.showSessionIdCopyFeedback(button, 'Failed', 'Copy failed', 'copy-failed'));
     }
 
-    async copyText(text) {
+    copyText(text) {
+        window.focus();
         if (navigator.clipboard?.writeText) {
-            try {
-                await navigator.clipboard.writeText(text);
-                return;
-            } catch (error) {
-                // Some browsers expose clipboard APIs over LAN HTTP but reject writes.
-            }
+            return navigator.clipboard.writeText(text);
         }
-
-        this.copyTextWithSelection(text);
+        return new Promise((resolve, reject) => {
+            try {
+                this.copyTextWithSelection(text);
+                resolve();
+            } catch (e) {
+                reject(e);
+            }
+        });
     }
 
     copyTextWithSelection(text) {
