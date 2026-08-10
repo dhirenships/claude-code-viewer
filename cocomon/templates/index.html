@@ -55,22 +55,34 @@
                 </select>
                 <input type="date" name="date_from" value="{{ search_filters.date_from or '' }}" aria-label="From date">
                 <input type="date" name="date_to" value="{{ search_filters.date_to or '' }}" aria-label="To date">
-                <label class="global-filter-check">
-                    <input type="checkbox" name="has_code" value="1" {{ 'checked' if search_filters.has_code else '' }}>
-                    Code
-                </label>
-                <label class="global-filter-check">
-                    <input type="checkbox" name="has_errors" value="1" {{ 'checked' if search_filters.has_errors else '' }}>
-                    Errors
-                </label>
-                <label class="global-filter-check">
-                    <input type="checkbox" name="has_tools" value="1" {{ 'checked' if search_filters.has_tools else '' }}>
-                    Tools
-                </label>
-                <label class="global-filter-check">
-                    <input type="checkbox" name="has_file_edits" value="1" {{ 'checked' if search_filters.has_file_edits else '' }}>
-                    Edits
-                </label>
+                {% set has_content_filters = search_filters.has_code or search_filters.has_errors or search_filters.has_tools or search_filters.has_file_edits %}
+                <details class="global-more-filters" {{ 'open' if has_content_filters else '' }}>
+                    <summary>
+                        <span>More filters</span>
+                        <span class="global-more-filter-state">
+                            {{ 'Content filtered' if has_content_filters else 'Content: Any' }}
+                        </span>
+                    </summary>
+                    <div class="global-content-filters">
+                        <label class="global-filter-check">
+                            <input type="checkbox" name="has_code" value="1" {{ 'checked' if search_filters.has_code else '' }}>
+                            Contains code
+                        </label>
+                        <label class="global-filter-check">
+                            <input type="checkbox" name="has_errors" value="1" {{ 'checked' if search_filters.has_errors else '' }}>
+                            Contains errors
+                        </label>
+                        <label class="global-filter-check">
+                            <input type="checkbox" name="has_tools" value="1" {{ 'checked' if search_filters.has_tools else '' }}>
+                            Tool activity
+                        </label>
+                        <label class="global-filter-check">
+                            <input type="checkbox" name="has_file_edits" value="1" {{ 'checked' if search_filters.has_file_edits else '' }}>
+                            File edits
+                        </label>
+                        <span class="global-filter-help">Matches all selected types.</span>
+                    </div>
+                </details>
             </div>
         </form>
 

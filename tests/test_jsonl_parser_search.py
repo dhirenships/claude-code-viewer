@@ -292,6 +292,58 @@ class JSONLParserSearchTests(unittest.TestCase):
             self.assertEqual(observer_results["total"], 1)
             self.assertEqual(observer_results["results"][0]["session_id"], "observer")
 
+    def test_conversation_messages_include_viewing_filter_flags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project_dir = Path(tmp) / "project"
+            project_dir.mkdir()
+            self._write_jsonl(
+                project_dir / "session.jsonl",
+                [
+                    {
+                        "type": "user",
+                        "message": {
+                            "role": "user",
+                            "content": "```python\nprint('hello')\n```",
+                        },
+                    },
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "type": "tool_use",
+                                    "name": "Edit",
+                                    "input": {
+                                        "file_path": "app.py",
+                                        "old_string": "before",
+                                        "new_string": "after",
+                                    },
+                                }
+                            ],
+                        },
+                    },
+                    {
+                        "type": "user",
+                        "message": {
+                            "role": "user",
+                            "content": "Traceback: example error",
+                        },
+                    },
+                ],
+            )
+
+            messages = JSONLParser(str(tmp)).get_conversation(
+                "project",
+                "session",
+                include_tools=True,
+            )["messages"]
+
+            self.assertTrue(messages[0]["has_code"])
+            self.assertTrue(messages[1]["has_tools"])
+            self.assertTrue(messages[1]["has_file_edits"])
+            self.assertTrue(messages[2]["has_errors"])
+
     def _user_row(self, content, time):
         return {
             "type": "user",

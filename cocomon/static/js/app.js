@@ -21,6 +21,7 @@ class ClaudeViewer {
         this.setupEventListeners();
         this.setupCodeCopyButtons();
         this.setupSearch();
+        this.setupViewingFilters();
         this.setupSidebar();
         this.setupConversationScroll();
         this.setupInfiniteScroll();
@@ -369,6 +370,62 @@ class ClaudeViewer {
         }
     }
 
+    setupViewingFilters() {
+        const filters = document.querySelectorAll('[data-view-filter]');
+        if (filters.length === 0) return;
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('view_filters') === '1') {
+            const selected = new Set(params.getAll('view'));
+            filters.forEach(filter => {
+                filter.checked = selected.has(filter.value);
+            });
+        }
+
+        filters.forEach(filter => {
+            if (filter.dataset.viewFilterBound === 'true') return;
+            filter.dataset.viewFilterBound = 'true';
+            filter.addEventListener('change', () => {
+                this.syncViewingFiltersToUrl();
+                this.applyViewingFilters();
+            });
+        });
+
+        this.applyViewingFilters();
+    }
+
+    syncViewingFiltersToUrl() {
+        const url = new URL(window.location.href);
+        url.searchParams.set('view_filters', '1');
+        url.searchParams.delete('view');
+        document.querySelectorAll('[data-view-filter]:checked').forEach(filter => {
+            url.searchParams.append('view', filter.value);
+        });
+        window.history.replaceState(window.history.state, '', url);
+    }
+
+    applyViewingFilters() {
+        const enabled = new Set(
+            Array.from(document.querySelectorAll('[data-view-filter]:checked'))
+                .map(filter => filter.value)
+        );
+        const messages = document.querySelectorAll('.messages-container .terminal-turn');
+        if (messages.length === 0) return;
+
+        let visibleCount = 0;
+        messages.forEach(message => {
+            const kind = message.dataset.viewKind || 'messages';
+            const visible = kind === 'messages' || enabled.has(kind);
+            message.classList.toggle('view-filter-hidden', !visible);
+            if (visible) visibleCount++;
+        });
+
+        const count = document.querySelector('[data-view-visible-count]');
+        if (count) {
+            count.textContent = visibleCount === messages.length ? '' : ` / ${visibleCount} shown`;
+        }
+    }
+
     setupConversationScroll() {
         const messagesContainer = document.querySelector('.messages-container');
         if (!messagesContainer || this.didInitialConversationScroll) return;
@@ -710,6 +767,7 @@ class ClaudeViewer {
 
         conversationView.replaceWith(nextConversationView);
         this.setupCodeCopyButtons();
+        this.setupViewingFilters();
         this.setupInfiniteScroll();
         this.setupSessionShare();
         this.restoreConversationScroll({
@@ -761,6 +819,7 @@ class ClaudeViewer {
             this._inf.pageMax = newTotalPages;
             this.setupCodeCopyButtons();
             this._updateLoadedCount();
+            this.applyViewingFilters();
 
             if (wasNearBottom) {
                 requestAnimationFrame(() => {
@@ -1381,6 +1440,7 @@ class ClaudeViewer {
             inf.pageMin = targetPage;
             this.setupCodeCopyButtons();
             this._updateLoadedCount();
+            this.applyViewingFilters();
         } finally {
             inf.loading = false;
             if (loader) loader.classList.remove('active');

@@ -272,9 +272,71 @@ main.container:has(.sessions-page) {
     margin: 0;
 }
 
+.global-more-filters {
+    position: relative;
+}
+
+.global-more-filters summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    height: 1.7rem;
+    padding: 0 0.45rem;
+    border: 1px solid var(--input-border);
+    border-radius: 0.3rem;
+    background: var(--surface-bg);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 600;
+    list-style: none;
+}
+
+.global-more-filters summary::-webkit-details-marker {
+    display: none;
+}
+
+.global-more-filters summary::after {
+    content: "▾";
+    color: var(--muted-color);
+}
+
+.global-more-filters[open] summary::after {
+    content: "▴";
+}
+
+.global-more-filter-state {
+    color: var(--muted-color);
+    font-weight: 500;
+}
+
+.global-content-filters {
+    position: absolute;
+    top: calc(100% + 0.3rem);
+    right: 0;
+    z-index: 45;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    width: max-content;
+    max-width: min(31rem, 80vw);
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.45rem;
+    background: var(--surface-bg);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.global-filter-help {
+    flex: 1 0 100%;
+    color: var(--muted-color);
+    font-size: 0.68rem;
+}
+
 .dark-theme .global-search-filters select,
 .dark-theme .global-search-filters input[type="date"],
-.dark-theme .global-filter-check {
+.dark-theme .global-filter-check,
+.dark-theme .global-more-filters summary {
     background: var(--page-bg);
     border-color: var(--border-color);
     color: var(--text-color) !important;
@@ -1278,6 +1340,67 @@ code {
     min-width: 160px;
 }
 
+.message-search-group {
+    flex: 0 1 24rem;
+    max-width: 24rem;
+}
+
+.view-filter-group {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    gap: 0.2rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.view-filter-group legend {
+    grid-column: 1 / -1;
+    width: auto;
+    margin: 0 0 0.2rem;
+    color: var(--muted-color);
+    font-size: 0.7rem;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.view-filter-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    min-height: 2rem;
+    margin: 0;
+    padding: 0.35rem 0.45rem;
+    border: 1px solid var(--input-border);
+    border-radius: 0.35rem;
+    background: var(--surface-bg);
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.view-filter-check:has(input:checked) {
+    border-color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--primary-color);
+}
+
+.view-filter-check input {
+    margin: 0;
+    accent-color: var(--primary-color);
+}
+
+.view-filter-hidden {
+    display: none !important;
+}
+
+.view-visible-count {
+    color: var(--primary-color);
+}
+
 .filter-group label {
     display: block;
     margin-bottom: 0.2rem;
@@ -1756,9 +1879,34 @@ code {
         font-size: 0.78rem;
     }
 
-    .global-search-filters input[type="date"],
-    .global-filter-check {
+    .global-search-filters input[type="date"] {
         display: none !important;
+    }
+
+    .global-more-filters {
+        grid-column: 1 / -1;
+    }
+
+    .global-more-filters summary {
+        width: 100%;
+        justify-content: space-between;
+        height: 2.15rem;
+        font-size: 0.78rem;
+    }
+
+    .global-content-filters {
+        position: static;
+        width: 100%;
+        max-width: none;
+        margin-top: 0.35rem;
+        box-shadow: none;
+    }
+
+    .global-filter-check {
+        display: inline-flex !important;
+        flex: 1 1 calc(50% - 0.35rem);
+        justify-content: flex-start;
+        min-height: 2rem;
     }
 
     /* Bigger touch targets */
@@ -1805,10 +1953,10 @@ code {
         gap: 0.25rem;
     }
 
-    /* Conversation filter bar: compact single row on mobile */
+    /* Conversation filter bar: search first, viewing controls below */
     .filter-section {
         flex-direction: row;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         gap: 0.4rem;
         align-items: center;
     }
@@ -1819,6 +1967,13 @@ code {
         flex: 1;
     }
 
+    .filter-section .message-search-group {
+        order: 1;
+        flex: 1 1 0;
+        width: auto;
+        max-width: none;
+    }
+
     .filter-section .filter-group label {
         display: none;
     }
@@ -1827,7 +1982,22 @@ code {
         display: none;
     }
 
+    .view-filter-group {
+        order: 2;
+        flex: 0 0 100%;
+        width: 100%;
+        min-inline-size: 0;
+        box-sizing: border-box;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .view-filter-check {
+        min-width: 0;
+        padding-inline: 0.3rem;
+    }
+
     .filter-actions {
+        order: 1;
         display: flex;
         gap: 0.3rem;
         flex: 0 0 auto;
@@ -2025,7 +2195,7 @@ code {
     }
 
     .embedded-view .search-filters form {
-        display: none;
+        display: block;
     }
 
     .embedded-view .conversation-summary {

@@ -128,6 +128,7 @@ class JSONLParser:
                     
                     # Parse different message types
                     parsed_message = self._parse_message(data, line_num, include_searchable_tools)
+                    parsed_message.update(self._content_view_flags(parsed_message))
                     
                     # Apply filters
                     if self._should_include_message(parsed_message, search, message_type, include_searchable_tools):
@@ -333,7 +334,6 @@ class JSONLParser:
 
             content = str(message.get("content", ""))
             text = content.lower().encode("utf-8", "surrogatepass")
-            tool_names = message.get("tool_names", [])
             starts.append(corpus_size)
             corpus_parts.append(text)
             corpus_parts.append(b"\x00")
@@ -343,14 +343,8 @@ class JSONLParser:
                 "role": message.get("role", ""),
                 "timestamp": message.get("timestamp"),
                 "content": content.encode("utf-8", "surrogatepass"),
-                "has_code": bool(message.get("has_code")),
-                "has_tools": bool(message.get("has_tool_activity")),
                 "is_tool_only": bool(message.get("is_tool_only")),
-                "has_file_edits": any(
-                    name in {"Write", "Edit", "MultiEdit", "NotebookEdit"}
-                    for name in tool_names
-                ),
-                "has_errors": self._message_has_error(message),
+                **self._content_view_flags(message),
             })
 
         if corpus_parts:
@@ -470,6 +464,18 @@ class JSONLParser:
             return True
         content = str(message.get("content", "")).lower()
         return "error" in content or "traceback" in content or "exception" in content
+
+    def _content_view_flags(self, message: Dict) -> Dict[str, bool]:
+        tool_names = message.get("tool_names", [])
+        return {
+            "has_code": bool(message.get("has_code")),
+            "has_tools": bool(message.get("has_tool_activity")),
+            "has_file_edits": any(
+                name in {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+                for name in tool_names
+            ),
+            "has_errors": self._message_has_error(message),
+        }
     
     def _parse_message(self, data: Dict, line_num: int, include_tools: bool = False) -> Dict:
         """Parse different types of JSONL messages"""

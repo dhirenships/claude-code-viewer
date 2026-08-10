@@ -52,6 +52,9 @@
 {% endif %}
 <div class="search-filters">
     <form id="search-form" method="get">
+        {% set view_filters_submitted = request.query_params.get('view_filters') == '1' %}
+        {% set selected_view_filters = request.query_params.getlist('view') %}
+        <input type="hidden" name="view_filters" value="1">
         {% if embedded %}
             <input type="hidden" name="embedded" value="true">
         {% endif %}
@@ -61,7 +64,7 @@
                 <i class="bi bi-layout-sidebar-reverse"></i>
             </a>
             {% endif %}
-            <div class="filter-group">
+            <div class="filter-group message-search-group">
                 <label for="search">Search Messages</label>
                 <input
                     type="text"
@@ -72,6 +75,22 @@
                     value="{{ search or '' }}"
                 >
             </div>
+
+            <fieldset class="view-filter-group" aria-label="Viewing filters">
+                <legend>Show</legend>
+                {% for value, label in [('code', 'Code'), ('errors', 'Errors'), ('tools', 'Tools'), ('edits', 'Edits')] %}
+                    <label class="view-filter-check">
+                        <input
+                            type="checkbox"
+                            name="view"
+                            value="{{ value }}"
+                            data-view-filter="{{ value }}"
+                            {{ 'checked' if not view_filters_submitted or value in selected_view_filters else '' }}
+                        >
+                        {{ label }}
+                    </label>
+                {% endfor %}
+            </fieldset>
 
             <div class="filter-actions">
                 <button type="submit" class="search-btn" title="Search">
@@ -93,6 +112,7 @@
                 <span class="summary-divider">/</span>
             {% endif %}
             <span class="loaded-count">{{ conversation.messages|length }}</span> of {{ conversation.total }} messages
+            <span class="view-visible-count" data-view-visible-count></span>
         </span>
         {% if search %}
             <span>
@@ -161,10 +181,12 @@
 {% if conversation.messages %}
     <div class="messages-container terminal-transcript">
         {% for message in conversation.messages %}
+            {% set view_kind = 'edits' if message.has_file_edits else ('errors' if message.has_errors else ('tools' if message.has_tools else ('code' if message.has_code else 'messages'))) %}
             <section
                 class="terminal-turn {{ message.role or message.type }} {{ 'search-target' if target_line and message.line_number == target_line else '' }}"
                 id="message-line-{{ message.line_number }}"
                 title="{{ message.timestamp or '' }}"
+                data-view-kind="{{ view_kind }}"
             >
                 <div class="terminal-prompt">
                     {% if message.role == 'user' or message.display_type == 'User' %}

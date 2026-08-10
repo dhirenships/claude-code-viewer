@@ -1254,7 +1254,7 @@ async def conversation_view(
     message_type: Optional[str] = Query(None),
     highlight: Optional[str] = Query(None),
     line: Optional[int] = Query(None, ge=1),
-    show_tools: bool = Query(False),
+    show_tools: bool = Query(True),
     embedded: bool = Query(False)
 ):
     """Conversation viewer page"""
@@ -1273,7 +1273,7 @@ async def embedded_conversation_view(
     message_type: Optional[str] = Query(None),
     highlight: Optional[str] = Query(None),
     line: Optional[int] = Query(None, ge=1),
-    show_tools: bool = Query(False)
+    show_tools: bool = Query(True)
 ):
     """Conversation viewer for the homepage right pane."""
     return await render_conversation_template(
