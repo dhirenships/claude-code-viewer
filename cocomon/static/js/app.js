@@ -10,6 +10,7 @@ class ClaudeViewer {
         this.activeSessionRevision = null;
         this.activeLiveStatus = null;
         this.activityTimer = null;
+        this.sidebarRefreshSequence = 0;
         this.shareTimer = null;
         this.didInitialConversationScroll = false;
         this.init();
@@ -634,16 +635,23 @@ class ClaudeViewer {
     }
 
     async refreshSidebarHtml() {
-        const currentSidebar = document.querySelector('.session-sidebar');
-        if (!currentSidebar) return;
+        const refreshSequence = ++this.sidebarRefreshSequence;
+        const requestUrl = window.location.href;
 
-        const response = await fetch(window.location.href, { cache: 'no-store' });
+        const response = await fetch(requestUrl, { cache: 'no-store' });
         if (!response.ok) return;
 
         const html = await response.text();
+        const isStale = refreshSequence !== this.sidebarRefreshSequence;
+        const locationChanged = requestUrl !== window.location.href;
+        if (isStale || locationChanged) return;
+
         const doc = new DOMParser().parseFromString(html, 'text/html');
         const nextSidebar = doc.querySelector('.session-sidebar');
         if (!nextSidebar) return;
+
+        const currentSidebar = document.querySelector('.session-sidebar');
+        if (!currentSidebar) return;
 
         const wasOpen = currentSidebar.classList.contains('mobile-open');
         currentSidebar.replaceWith(nextSidebar);

@@ -11,6 +11,13 @@ from bisect import bisect_right
 # Session lines that can carry title/recap metadata contain one of these.
 SESSION_METADATA_MARKERS = (b'"customTitle"', b'"slug"', b'"lastPrompt"', b'away_summary')
 
+
+DEFAULT_EXCLUDED_SEARCH_PROJECTS = {
+    "mem/observer/sessions",
+    "mom/observer/sessions",
+}
+
+
 class JSONLParser:
     def __init__(self, claude_projects_path: str = None):
         self.claude_projects_path = claude_projects_path or os.path.expanduser("~/.claude/projects")
@@ -428,6 +435,12 @@ class JSONLParser:
     def _entry_matches_filters(self, entry: Dict, filters: Dict[str, Any]) -> bool:
         project = filters.get("project")
         if project and entry["project_name"] != project:
+            return False
+        if (
+            not project
+            and entry.get("project_display_name", "").lower()
+            in DEFAULT_EXCLUDED_SEARCH_PROJECTS
+        ):
             return False
 
         role = filters.get("role")

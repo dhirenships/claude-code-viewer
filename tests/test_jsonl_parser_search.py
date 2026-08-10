@@ -263,6 +263,35 @@ class JSONLParserSearchTests(unittest.TestCase):
             conversation = parser.get_conversation("project", "session-1")
             self.assertEqual(conversation["metadata"]["session_last_prompt"], "latest ask")
 
+    def test_global_search_excludes_observer_sessions_unless_selected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            regular_project = Path(tmp) / "regular-project"
+            observer_project_name = "-Users-name--claude-mem-observer-sessions"
+            observer_project = Path(tmp) / observer_project_name
+            regular_project.mkdir()
+            observer_project.mkdir()
+
+            matching_message = {
+                "type": "user",
+                "timestamp": "2026-08-10T10:00:00Z",
+                "message": {"role": "user", "content": "WeeklyUpdate"},
+            }
+            self._write_jsonl(regular_project / "regular.jsonl", [matching_message])
+            self._write_jsonl(observer_project / "observer.jsonl", [matching_message])
+
+            parser = JSONLParser(str(tmp))
+
+            default_results = parser.search_messages("WeeklyUpdate")
+            observer_results = parser.search_messages(
+                "WeeklyUpdate",
+                filters={"project": observer_project_name},
+            )
+
+            self.assertEqual(default_results["total"], 1)
+            self.assertEqual(default_results["results"][0]["session_id"], "regular")
+            self.assertEqual(observer_results["total"], 1)
+            self.assertEqual(observer_results["results"][0]["session_id"], "observer")
+
     def _user_row(self, content, time):
         return {
             "type": "user",
