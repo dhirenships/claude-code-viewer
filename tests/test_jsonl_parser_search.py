@@ -123,14 +123,14 @@ class JSONLParserSearchTests(unittest.TestCase):
             )
 
             parser = JSONLParser(str(tmp))
-            original_build = parser._build_search_entries_for_file
+            original_update = parser._update_search_file
             built_paths = []
 
-            def tracking_build(path, mtime_ns):
+            def tracking_update(path, mtime_ns, size):
                 built_paths.append(Path(path).name)
-                return original_build(path, mtime_ns)
+                return original_update(path, mtime_ns, size)
 
-            parser._build_search_entries_for_file = tracking_build
+            parser._update_search_file = tracking_update
 
             parser.search_messages("needle")
             self.assertEqual(sorted(built_paths), ["session-1.jsonl", "session-2.jsonl"])
@@ -151,6 +151,124 @@ class JSONLParserSearchTests(unittest.TestCase):
 
             self.assertEqual(built_paths, ["session-2.jsonl"])
             self.assertEqual(results["total"], 2)
+
+    def test_search_index_parses_only_appended_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project_dir = Path(tmp) / "project"
+            project_dir.mkdir()
+            session_path = project_dir / "session-1.jsonl"
+            self._write_jsonl(session_path, [self._user_row("first needle", "10:00:00")])
+
+            parser = JSONLParser(str(tmp))
+            self.assertEqual(parser.search_messages("needle")["total"], 1)
+            first_entry = parser._search_file_index[str(session_path)]["entries"][0]
+
+            parsed_lines = []
+            original_parse = parser._parse_message
+
+            def tracking_parse(data, line_num, include_tools=False):
+                parsed_lines.append(line_num)
+                return original_parse(data, line_num, include_tools)
+
+            parser._parse_message = tracking_parse
+            with session_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(self._user_row("second NEEDLE", "10:00:01")) + "\n")
+
+            results = parser.search_messages("Needle")
+
+            self.assertEqual(parsed_lines, [2])
+            self.assertIs(parser._search_file_index[str(session_path)]["entries"][0], first_entry)
+            self.assertEqual(results["total"], 2)
+            self.assertEqual([r["line_number"] for r in results["results"]], [2, 1])
+            self.assertIn("<mark>NEEDLE</mark>", results["results"][0]["snippet"])
+
+    def test_search_index_rereads_rewritten_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project_dir = Path(tmp) / "project"
+            project_dir.mkdir()
+            session_path = project_dir / "session-1.jsonl"
+            self._write_jsonl(session_path, [self._user_row("old needle", "10:00:00")])
+
+            parser = JSONLParser(str(tmp))
+            self.assertEqual(parser.search_messages("old needle")["total"], 1)
+
+            # Longer than before, so only the content check can spot the rewrite.
+            self._write_jsonl(
+                session_path,
+                [
+                    self._user_row("new needle", "10:00:00"),
+                    self._user_row("another needle", "10:00:01"),
+                ],
+            )
+
+            self.assertEqual(parser.search_messages("old needle")["total"], 0)
+            self.assertEqual(parser.search_messages("needle")["total"], 2)
+
+    def test_search_index_handles_last_line_without_newline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project_dir = Path(tmp) / "project"
+            project_dir.mkdir()
+            session_path = project_dir / "session-1.jsonl"
+            first = json.dumps(self._user_row("first needle", "10:00:00"))
+            second = json.dumps(self._user_row("second needle", "10:00:01"))
+            session_path.write_text(first, encoding="utf-8")
+
+            parser = JSONLParser(str(tmp))
+            self.assertEqual(parser.search_messages("needle")["total"], 1)
+
+            with session_path.open("a", encoding="utf-8") as f:
+                f.write("\n" + second[:20])
+            self.assertEqual(parser.search_messages("needle")["total"], 1)
+            self.assertEqual(parser.get_sessions("project")[0]["message_count"], 2)
+
+            with session_path.open("a", encoding="utf-8") as f:
+                f.write(second[20:] + "\n")
+            results = parser.search_messages("needle")
+
+            self.assertEqual(results["total"], 2)
+            self.assertEqual([r["line_number"] for r in results["results"]], [2, 1])
+            self.assertEqual(parser.get_sessions("project")[0]["message_count"], 2)
+
+    def test_session_metadata_is_cached_and_updated_on_append(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project_dir = Path(tmp) / "project"
+            project_dir.mkdir()
+            session_path = project_dir / "session-1.jsonl"
+            self._write_jsonl(
+                session_path,
+                [
+                    {**self._user_row("hello", "10:00:00"), "slug": "first-slug"},
+                    {"type": "custom-title", "customTitle": "My title"},
+                ],
+            )
+
+            parser = JSONLParser(str(tmp))
+            session = parser.get_sessions("project")[0]
+            self.assertEqual(session["message_count"], 2)
+            self.assertEqual(session["session_name"], "My title")
+            self.assertEqual(session["session_slug"], "first-slug")
+
+            with session_path.open("a", encoding="utf-8") as f:
+                f.write("\n")
+                f.write(json.dumps({"type": "system", "subtype": "away_summary",
+                                    "content": "Recap here (disable recaps in /config)"}) + "\n")
+                f.write(json.dumps({"type": "last-prompt", "lastPrompt": "latest ask"}) + "\n")
+
+            session = parser.get_sessions("project")[0]
+            self.assertEqual(session["message_count"], 4)
+            self.assertEqual(session["session_name"], "My title")
+            self.assertEqual(session["session_recap"], "Recap here")
+            self.assertEqual(session["session_last_prompt"], "latest ask")
+
+            conversation = parser.get_conversation("project", "session-1")
+            self.assertEqual(conversation["metadata"]["session_last_prompt"], "latest ask")
+
+    def _user_row(self, content, time):
+        return {
+            "type": "user",
+            "timestamp": f"2026-05-21T{time}Z",
+            "message": {"role": "user", "content": content},
+        }
 
     def _write_jsonl(self, path, rows):
         with path.open("w", encoding="utf-8") as f:

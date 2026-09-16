@@ -6,14 +6,17 @@ import re
 from datetime import datetime
 import difflib
 import html
+from bisect import bisect_right
+
+# Session lines that can carry title/recap metadata contain one of these.
+SESSION_METADATA_MARKERS = (b'"customTitle"', b'"slug"', b'"lastPrompt"', b'away_summary')
 
 class JSONLParser:
     def __init__(self, claude_projects_path: str = None):
         self.claude_projects_path = claude_projects_path or os.path.expanduser("~/.claude/projects")
         self.claude_home = os.path.dirname(self.claude_projects_path.rstrip(os.sep))
         self._session_registry = None
-        self._search_index_signature = None
-        self._search_index = []
+        self._session_file_info = {}
         self._search_file_index = {}
     
     def get_projects(self) -> List[Dict]:
@@ -51,6 +54,11 @@ class JSONLParser:
                 "latest_modified": latest_session["modified"] if latest_session else None,
             })
 
+        current_paths = {session["path"] for project in projects for session in project["sessions"]}
+        for cached_path in list(self._session_file_info):
+            if cached_path not in current_paths:
+                del self._session_file_info[cached_path]
+
         return sorted(
             projects,
             key=lambda project: project["latest_modified"] or "",
@@ -69,19 +77,17 @@ class JSONLParser:
             if filename.endswith('.jsonl'):
                 file_path = os.path.join(project_path, filename)
                 file_stats = os.stat(file_path)
-                
-                # Count messages in file
-                message_count = self._count_messages(file_path)
-                metadata = self._get_session_metadata(file_path, filename.replace('.jsonl', ''))
-                
+                session_id = filename.replace('.jsonl', '')
+                file_info = self._get_session_file_info(file_path, file_stats)
+
                 sessions.append({
-                    "id": filename.replace('.jsonl', ''),
+                    "id": session_id,
                     "filename": filename,
                     "path": file_path,
                     "size": file_stats.st_size,
                     "modified": datetime.fromtimestamp(file_stats.st_mtime).isoformat(),
-                    "message_count": message_count,
-                    **metadata
+                    "message_count": file_info["message_count"],
+                    **self._session_metadata_from_info(file_info, session_id)
                 })
         
         return sorted(sessions, key=lambda x: x["modified"], reverse=True)
@@ -164,46 +170,67 @@ class JSONLParser:
         if not search:
             return {"results": [], "total": 0, "limit": limit}
 
-        entries = self._get_search_index()
-        results = []
-        total = 0
-        search_text = search.lower()
+        records = self._get_search_index()
+        needle = search.lower().encode("utf-8", "surrogatepass")
         filters = filters or {}
+        project = filters.get("project")
+        matches = []
+        indexed_messages = 0
+
+        for record in records:
+            indexed_messages += len(record["entries"])
+            if project and record["project_name"] != project:
+                continue
+
+            for index in self._matching_entry_indexes(record, needle):
+                entry = record["entries"][index]
+                match = {
+                    **entry,
+                    "project_name": record["project_name"],
+                    "project_display_name": record["project_display_name"],
+                    "session_id": record["session_id"],
+                    "session_modified": record["session_modified"],
+                    "message_date": self._message_date(entry, record["session_modified"]),
+                }
+                if self._entry_matches_filters(match, filters):
+                    matches.append(match)
+
+        # Matches are collected in path/line order and the sort is stable, so
+        # ties keep the same order they had in a fully sorted index.
+        matches.sort(
+            key=lambda match: match["timestamp"] or match["session_modified"],
+            reverse=True,
+        )
+
+        results = []
         session_match_count = {}
-
-        for entry in entries:
-            if not self._entry_matches_filters(entry, filters):
-                continue
-
-            if search_text not in entry["search_text"]:
-                continue
-
-            session_key = (entry["project_name"], entry["session_id"])
+        for match in matches:
+            session_key = (match["project_name"], match["session_id"])
             session_match_count[session_key] = session_match_count.get(session_key, 0) + 1
-            total += 1
             if len(results) >= limit:
                 continue
 
+            content = match["content"].decode("utf-8", "surrogatepass")
             results.append({
-                "project_name": entry["project_name"],
-                "project_display_name": entry["project_display_name"],
-                "session_id": entry["session_id"],
-                "session_modified": entry["session_modified"],
-                "line_number": entry["line_number"],
+                "project_name": match["project_name"],
+                "project_display_name": match["project_display_name"],
+                "session_id": match["session_id"],
+                "session_modified": match["session_modified"],
+                "line_number": match["line_number"],
                 "page": ((session_match_count[session_key] - 1) // 50) + 1,
-                "role": entry["role"],
-                "timestamp": entry["timestamp"],
-                "snippet": self._make_search_snippet(entry["content"], search),
-                "has_tools": entry["has_tools"],
-                "is_tool_only": entry["is_tool_only"],
-                "has_file_edits": entry["has_file_edits"],
+                "role": match["role"],
+                "timestamp": match["timestamp"],
+                "snippet": self._make_search_snippet(content, search),
+                "has_tools": match["has_tools"],
+                "is_tool_only": match["is_tool_only"],
+                "has_file_edits": match["has_file_edits"],
             })
 
         return {
             "results": results,
-            "total": total,
+            "total": len(matches),
             "limit": limit,
-            "indexed_messages": len(entries),
+            "indexed_messages": indexed_messages,
             "matching_sessions": [
                 {
                     "project_name": project_name,
@@ -215,13 +242,22 @@ class JSONLParser:
         }
 
     def _get_search_index(self) -> List[Dict]:
+        """Return one search record per session file, refreshing changed files."""
         signature = self._get_search_index_signature()
-        if signature == self._search_index_signature:
-            return self._search_index
+        current_paths = {path for path, _, _ in signature}
 
-        self._search_index = self._build_search_index(signature)
-        self._search_index_signature = signature
-        return self._search_index
+        for cached_path in list(self._search_file_index):
+            if cached_path not in current_paths:
+                del self._search_file_index[cached_path]
+
+        records = []
+        for session_path, mtime_ns, size in signature:
+            record = self._search_file_index.get(session_path)
+            if not record or record["signature"] != (mtime_ns, size):
+                record = self._update_search_file(session_path, mtime_ns, size)
+            records.append(record)
+
+        return records
 
     def _get_search_index_signature(self) -> Tuple:
         files = []
@@ -242,83 +278,152 @@ class JSONLParser:
 
         return tuple(sorted(files))
 
-    def _build_search_index(self, signature: Optional[Tuple] = None) -> List[Dict]:
-        signature = signature if signature is not None else self._get_search_index_signature()
-        entries = []
-        current_paths = {path for path, _, _ in signature}
+    def _update_search_file(self, session_path: str, mtime_ns: int, size: int) -> Dict:
+        """Parse the lines added to a session file into its search record.
 
-        for cached_path in list(self._search_file_index):
-            if cached_path not in current_paths:
-                del self._search_file_index[cached_path]
+        Each record keeps every entry's lowercased text in one NUL-terminated
+        UTF-8 `corpus`, with `starts` giving each entry's offset into it. One
+        bytes.find per file then skips files without a match, and bytes stay
+        ~4x smaller than str once emoji in tool output force UCS-4 storage.
+        """
+        record = self._search_file_index.get(session_path)
+        if record is None:
+            project_name = os.path.basename(os.path.dirname(session_path))
+            record = {
+                "project_name": project_name,
+                "project_display_name": self._format_project_name(project_name),
+                "session_id": os.path.splitext(os.path.basename(session_path))[0],
+                "reader": {},
+            }
 
-        for session_path, mtime_ns, size in signature:
-            file_signature = (mtime_ns, size)
-            cached = self._search_file_index.get(session_path)
-            if cached and cached.get("signature") == file_signature:
-                file_entries = cached["entries"]
+        try:
+            restarted, first_line, lines, _ = self._read_appended_lines(session_path, record["reader"])
+        except OSError:
+            record["reader"].clear()
+            restarted, first_line, lines = True, 1, []
+
+        if restarted:
+            record["entries"] = []
+            record["starts"] = []
+            record["corpus"] = b""
+
+        entries = record["entries"]
+        starts = record["starts"]
+        corpus_parts = []
+        corpus_size = len(record["corpus"])
+
+        for line_num, line in enumerate(lines, first_line):
+            try:
+                data = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(data, dict):
+                continue
+
+            message = self._parse_message(data, line_num, include_tools=True)
+            if not self._should_include_message(message, None, None, include_tools=True):
+                continue
+
+            content = str(message.get("content", ""))
+            text = content.lower().encode("utf-8", "surrogatepass")
+            tool_names = message.get("tool_names", [])
+            starts.append(corpus_size)
+            corpus_parts.append(text)
+            corpus_parts.append(b"\x00")
+            corpus_size += len(text) + 1
+            entries.append({
+                "line_number": line_num,
+                "role": message.get("role", ""),
+                "timestamp": message.get("timestamp"),
+                "content": content.encode("utf-8", "surrogatepass"),
+                "has_code": bool(message.get("has_code")),
+                "has_tools": bool(message.get("has_tool_activity")),
+                "is_tool_only": bool(message.get("is_tool_only")),
+                "has_file_edits": any(
+                    name in {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+                    for name in tool_names
+                ),
+                "has_errors": self._message_has_error(message),
+            })
+
+        if corpus_parts:
+            record["corpus"] += b"".join(corpus_parts)
+        record["signature"] = (mtime_ns, size)
+        record["session_modified"] = datetime.fromtimestamp(mtime_ns / 1_000_000_000).isoformat()
+        self._search_file_index[session_path] = record
+        return record
+
+    def _matching_entry_indexes(self, record: Dict, needle: bytes):
+        """Yield the index of each entry in a search record containing needle."""
+        corpus = record["corpus"]
+        starts = record["starts"]
+        pos = corpus.find(needle)
+        while pos != -1:
+            index = bisect_right(starts, pos) - 1
+            # The byte before the next entry's start is this entry's NUL terminator.
+            entry_end = starts[index + 1] - 1 if index + 1 < len(starts) else len(corpus) - 1
+            if pos + len(needle) <= entry_end:
+                yield index
+                pos = corpus.find(needle, entry_end + 1)
             else:
-                file_entries = self._build_search_entries_for_file(
-                    session_path,
-                    mtime_ns,
-                )
-                self._search_file_index[session_path] = {
-                    "signature": file_signature,
-                    "entries": file_entries,
-                }
-            entries.extend(file_entries)
+                pos = corpus.find(needle, pos + 1)
 
-        return sorted(
-            entries,
-            key=lambda entry: entry.get("timestamp") or entry["session_modified"],
-            reverse=True,
-        )
+    def _read_appended_lines(self, path: str, state: Dict) -> Tuple[bool, int, List[bytes], bytes]:
+        """Read the complete lines appended to a JSONL file since the last call.
 
-    def _build_search_entries_for_file(self, session_path: str, mtime_ns: int) -> List[Dict]:
-        project_name = os.path.basename(os.path.dirname(session_path))
-        project_display_name = self._format_project_name(project_name)
-        session_id = os.path.splitext(os.path.basename(session_path))[0]
-        session_modified = datetime.fromtimestamp(mtime_ns / 1_000_000_000).isoformat()
-        entries = []
+        Claude Code only appends to session files, so `state` remembers how far
+        the last call read and the bytes just before that point. If those bytes
+        changed, the file was rewritten and is read again from the top.
 
-        if not os.path.exists(session_path):
-            return entries
+        Returns (restarted, first_line_number, lines, unfinished_line). When
+        restarted is True, callers must drop what they built from earlier lines.
+        """
+        offset = state.get("offset", 0)
+        tail = state.get("tail", b"")
 
-        with open(session_path, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                try:
-                    data = json.loads(line.strip())
-                except json.JSONDecodeError:
-                    continue
+        with open(path, "rb") as f:
+            if offset:
+                f.seek(offset - len(tail))
+                restarted = f.read(len(tail)) != tail
+            else:
+                restarted = True
+            if restarted:
+                state.clear()
+                offset, tail = 0, b""
+                f.seek(0)
+            data = f.read()
 
-                message = self._parse_message(data, line_num, include_tools=True)
-                if not self._should_include_message(message, None, None, include_tools=True):
-                    continue
+        if state.get("open_line"):
+            # The last call consumed a final line that had no newline yet.
+            if not data:
+                return False, state["lines"] + 1, [], b""
+            if not data.startswith(b"\n"):
+                state.clear()
+                return self._read_appended_lines(path, state)
+            data = data[1:]
+            offset += 1
+            tail = (tail + b"\n")[-64:]
 
-                content = str(message.get("content", ""))
-                role = message.get("role", "")
-                tool_names = message.get("tool_names", [])
-                entries.append({
-                    "project_name": project_name,
-                    "project_display_name": project_display_name,
-                    "session_id": session_id,
-                    "session_modified": session_modified,
-                    "line_number": line_num,
-                    "role": role,
-                    "timestamp": message.get("timestamp"),
-                    "content": content,
-                    "search_text": content.lower(),
-                    "message_date": self._message_date(message, session_modified),
-                    "has_code": bool(message.get("has_code")),
-                    "has_tools": bool(message.get("has_tool_activity")),
-                    "is_tool_only": bool(message.get("is_tool_only")),
-                    "has_file_edits": any(
-                        name in {"Write", "Edit", "MultiEdit", "NotebookEdit"}
-                        for name in tool_names
-                    ),
-                    "has_errors": self._message_has_error(message),
-                })
+        first_line = state.get("lines", 0) + 1
+        *lines, unfinished = data.split(b"\n")
+        open_line = bool(unfinished.strip()) and self._is_json(unfinished)
+        if open_line:
+            lines.append(unfinished)
+            unfinished = b""
 
-        return entries
+        consumed = len(data) - len(unfinished)
+        state["offset"] = offset + consumed
+        state["tail"] = (tail + data[max(0, consumed - 64):consumed])[-64:]
+        state["lines"] = first_line - 1 + len(lines)
+        state["open_line"] = open_line
+        return restarted, first_line, lines, unfinished
+
+    def _is_json(self, data: bytes) -> bool:
+        try:
+            json.loads(data)
+        except ValueError:
+            return False
+        return True
 
     def _entry_matches_filters(self, entry: Dict, filters: Dict[str, Any]) -> bool:
         project = filters.get("project")
@@ -660,13 +765,65 @@ class JSONLParser:
 
         return f"{prefix}{highlighted}{suffix}"
     
-    def _count_messages(self, file_path: str) -> int:
-        """Count total messages in JSONL file"""
+    def _get_session_file_info(self, file_path: str, file_stats: Optional[os.stat_result] = None) -> Dict:
+        """Return the message count and title fields stored in a session file.
+
+        Cached per file. A changed file only has its newly appended lines read,
+        and only lines that mention a metadata key are JSON-decoded.
+        """
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return sum(1 for line in f if line.strip())
-        except:
-            return 0
+            file_stats = file_stats or os.stat(file_path)
+            signature = (file_stats.st_mtime_ns, file_stats.st_size)
+            info = self._session_file_info.get(file_path)
+            if info and info["signature"] == signature:
+                return info
+
+            info = info or {"reader": {}}
+            restarted, _, lines, unfinished = self._read_appended_lines(file_path, info["reader"])
+        except OSError:
+            self._session_file_info.pop(file_path, None)
+            return {
+                "message_count": 0,
+                "custom_title": None,
+                "slug": None,
+                "away_summary": None,
+                "last_prompt": None,
+            }
+
+        if restarted:
+            info.update(
+                line_count=0,
+                custom_title=None,
+                slug=None,
+                away_summary=None,
+                last_prompt=None,
+            )
+
+        for line in lines:
+            if not line.strip():
+                continue
+            info["line_count"] += 1
+            if not any(marker in line for marker in SESSION_METADATA_MARKERS):
+                continue
+
+            try:
+                data = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(data, dict):
+                continue
+
+            info["custom_title"] = data.get("customTitle") or info["custom_title"]
+            info["slug"] = data.get("slug") or info["slug"]
+            if data.get("type") == "system" and data.get("subtype") == "away_summary":
+                info["away_summary"] = data.get("content") or info["away_summary"]
+            info["last_prompt"] = data.get("lastPrompt") or info["last_prompt"]
+
+        # A line still being written counts as a message too.
+        info["message_count"] = info["line_count"] + (1 if unfinished.strip() else 0)
+        info["signature"] = signature
+        self._session_file_info[file_path] = info
+        return info
 
     def _get_session_registry(self) -> Dict:
         """Read live Claude session metadata from ~/.claude/sessions/*.json."""
@@ -696,39 +853,21 @@ class JSONLParser:
 
     def _get_session_metadata(self, file_path: str, session_id: str) -> Dict:
         """Return display metadata discoverable from Claude's JSON/JSONL stores."""
+        return self._session_metadata_from_info(self._get_session_file_info(file_path), session_id)
+
+    def _session_metadata_from_info(self, info: Dict, session_id: str) -> Dict:
         registry_meta = self._get_session_registry().get(session_id, {})
-        custom_title = None
-        slug = None
-        away_summary = None
-        last_prompt = None
-
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    try:
-                        data = json.loads(line.strip())
-                    except json.JSONDecodeError:
-                        continue
-
-                    custom_title = data.get("customTitle") or custom_title
-                    slug = data.get("slug") or slug
-                    if data.get("type") == "system" and data.get("subtype") == "away_summary":
-                        away_summary = data.get("content") or away_summary
-                    last_prompt = data.get("lastPrompt") or last_prompt
-        except OSError:
-            pass
-
+        away_summary = info["away_summary"]
         if away_summary:
             away_summary = away_summary.replace(" (disable recaps in /config)", "").strip()
 
         return {
-            "session_name": registry_meta.get("name") or custom_title or slug,
-            "session_custom_title": custom_title,
-            "session_slug": slug,
+            "session_name": registry_meta.get("name") or info["custom_title"] or info["slug"],
+            "session_custom_title": info["custom_title"],
+            "session_slug": info["slug"],
             "session_recap": away_summary,
-            "session_last_prompt": last_prompt,
+            "session_last_prompt": info["last_prompt"],
         }
-    
     def _format_project_name(self, project_dir: str) -> str:
         """Convert project directory name to readable format"""
         # Convert -media-sukhon-usbd-python-projects-converters to a readable name

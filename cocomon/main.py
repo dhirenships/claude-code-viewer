@@ -1055,9 +1055,10 @@ async def root(
 ):
     """Main page showing all projects"""
     parser = get_parser()
+    # The live lookup shells out to osascript; start it now so it runs
+    # alongside the session scan instead of after it.
+    live_index_future = asyncio.get_running_loop().run_in_executor(None, _build_live_terminal_index)
     all_projects = parser.get_projects_with_sessions()
-    live_index = _build_live_terminal_index()
-    _annotate_projects_with_live_targets(all_projects, live_index)
     global_search = (q or "").strip()
     search_filters = build_search_filters(
         project_filter,
@@ -1073,6 +1074,7 @@ async def root(
         parser.search_messages(global_search, filters=search_filters)
         if global_search else None
     )
+    _annotate_projects_with_live_targets(all_projects, await live_index_future)
     projects = (
         _filter_projects_to_matching_sessions(all_projects, global_search_results)
         if global_search else all_projects
