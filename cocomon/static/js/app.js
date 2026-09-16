@@ -589,7 +589,9 @@ class ClaudeViewer {
             this.activeSessionRevision = activeRevision;
             this.activeLiveStatus = activeLiveStatus;
 
-            if (changed && document.querySelector('.sessions-page')) {
+            // Keep the sidebar frozen while search results are up; a refresh would
+            // swap out the filtered project list the results belong to.
+            if (changed && document.querySelector('.sessions-page') && !this.isShowingSearchResults()) {
                 await this.refreshSidebarHtml();
             }
 
@@ -601,6 +603,10 @@ class ClaudeViewer {
         } finally {
             this.scheduleActivityPoll();
         }
+    }
+
+    isShowingSearchResults() {
+        return Boolean(document.querySelector('.global-search-results'));
     }
 
     getActiveSessionInfo() {
