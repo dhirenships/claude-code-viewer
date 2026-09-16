@@ -5,6 +5,20 @@ All notable changes to claude-code-viewer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-09-16
+
+### Added
+- Copyable session ids in the sidebar.
+
+### Changed
+- Home page and global search are faster: session metadata and the search index are cached per file and only newly appended lines are parsed. Peak memory during search is lower.
+- The sidebar no longer auto-refreshes while global search results are shown, so it keeps the filtered project list.
+- User turns are highlighted in conversations.
+
+### Fixed
+- Copying a session id works reliably across browsers.
+- Template responses use the request-first `TemplateResponse` signature, and Jinja2 is pinned below 3.1.5.
+
 ## [0.1.3] - 2026-05-22
 
 ### Changed
